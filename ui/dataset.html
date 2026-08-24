@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SOSA EW Platform — Dataset</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/shared.css">
+    <style>
+        /* Two independent pipelines share this page but must never look like one flow —
+           color-coded panels carried through into the inspector badge below so it's always
+           visually obvious which pipeline's data you're looking at. */
+        .pipeline-panel {
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .pipeline-classifier { background: rgba(0, 210, 255, 0.05); border: 1px solid rgba(0, 210, 255, 0.25); border-left: 4px solid var(--accent-blue); }
+        .pipeline-deinterleave { background: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.3); border-left: 4px solid var(--accent-purple); }
+        .pipeline-label {
+            font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+        .pipeline-label.classifier { color: var(--accent-blue); }
+        .pipeline-label.deinterleave { color: var(--accent-purple); }
+        .split-banner {
+            background: #16202f; border: 1px solid var(--border-color); border-radius: 6px;
+            padding: 10px 12px; margin-bottom: 14px; font-size: 8.5pt; color: #9ca3af; line-height: 1.5;
+        }
+        .source-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 8pt;
+            font-weight: bold; text-transform: uppercase; margin-left: 8px;
+        }
+        .source-badge.classifier { background: rgba(0, 210, 255, 0.15); color: var(--accent-blue); }
+        .source-badge.deinterleave { background: rgba(124, 58, 237, 0.2); color: #c4b5fd; }
+        .inspector-card { border-left: 4px solid var(--border-color); transition: border-color 0.2s; }
+        .inspector-card.classifier { border-left-color: var(--accent-blue); }
+        .inspector-card.deinterleave { border-left-color: var(--accent-purple); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>SOSA EW Open-Set Recognition Platform</h1>
+        <span class="status-tag">DATASET</span>
+        <span class="status-tag" id="readonly-badge" style="display:none; background:#7c2d12; color:#fdba74;">READ-ONLY DEMO</span>
+    </header>
+    <nav class="top-nav">
+        <a href="/">Training</a>
+        <a href="/validation">Testing</a>
+        <a href="/inference">Inference</a>
+        <a href="/dataset" class="active">Dataset</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/live">Live Simulation</a>
+        <a href="/help">Help</a>
+    </nav>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="split-banner">
+                <b style="color: var(--text-main);">Two independent pipelines on this page</b> — they never interact. The <span style="color: var(--accent-blue); font-weight: bold;">blue Classifier panel</span> feeds Training/Testing/Inference/Live Simulation. The <span style="color: var(--accent-purple); font-weight: bold;">purple Deinterleaving panel</span> feeds only the deinterleaving buttons below and Live Simulation's replay — neither dataset nor its results ever crosses into the other pipeline.
+            </div>
+
+            <div class="pipeline-panel pipeline-classifier">
+            <div class="pipeline-label classifier">⬤ Classifier Pipeline</div>
+            <div class="card-title">Classification Dataset (Training &amp; Testing)</div>
+            <div class="hint" style="margin-bottom: 8px;">This is the dataset the classifier actually trains and is tested on — generate it here, then Train Model on the Training page consumes it directly. A fresh random population of radar families + which classes are held out is drawn every time you click Generate.</div>
+
+            <label>Number of Emitters (Classes)</label>
+            <input type="number" id="cls-num-classes" value="20" min="2" max="100">
+            <div class="definition">How many distinct radar families exist in total. Changing this reconstructs the model's classifier head to match before the next training run — the dataset defines this, not a fixed config file.</div>
+
+            <label>Holdout Classes (Open-Set Test)</label>
+            <input type="number" id="cls-holdout" value="3" min="0" max="10">
+
+            <label>Samples per Known Class</label>
+            <input type="number" id="cls-samples" value="200" min="10" max="2000">
+
+            <label>Noise Percentage (Unstructured OOD)</label>
+            <input type="number" id="cls-noise-pct" value="10" min="0" max="100" step="1">
+            <div class="definition">Real intercepts include both genuinely novel emitter types AND unstructured junk/noise pulses — this injects that noise into the open-set evaluation pool alongside the holdout classes, so open-set testing isn't only "never-seen radar types" but also realistic garbage signals. Noise rows are never used to train the classifier's weights, only to evaluate it.</div>
+
+            <details style="margin-top: 10px;">
+                <summary style="cursor: pointer; color: var(--accent-blue); font-size: 9pt; font-weight: bold; text-transform: uppercase;">Advanced: Population Ranges</summary>
+                <div class="definition" style="margin-top: 8px;">Physical parameter spans the 20 radar families are drawn from. Leave defaults to match the original ranges; narrow them for a harder/more separable task.</div>
+
+                <div class="form-grid" style="margin-top: 8px;">
+                    <div><label>Frequency Min (MHz)</label><input type="number" id="cls-range-freq-min" value="2000"></div>
+                    <div><label>Frequency Max (MHz)</label><input type="number" id="cls-range-freq-max" value="18000"></div>
+                    <div><label>Pulse Width Min (µs)</label><input type="number" id="cls-range-pw-min" value="0.5" step="0.1"></div>
+                    <div><label>Pulse Width Max (µs)</label><input type="number" id="cls-range-pw-max" value="50"></div>
+                    <div><label>PRI Min (µs)</label><input type="number" id="cls-range-pri-min" value="10"></div>
+                    <div><label>PRI Max (µs)</label><input type="number" id="cls-range-pri-max" value="1000"></div>
+                    <div><label>RSSI Min (dBm)</label><input type="number" id="cls-range-rssi-min" value="-80"></div>
+                    <div><label>RSSI Max (dBm)</label><input type="number" id="cls-range-rssi-max" value="-20"></div>
+                    <div><label>Rise Time Min (ns)</label><input type="number" id="cls-range-rise-min" value="5"></div>
+                    <div><label>Rise Time Max (ns)</label><input type="number" id="cls-range-rise-max" value="150"></div>
+                </div>
+            </details>
+
+            <button id="gen-classification-btn" style="background: var(--accent-blue); color: #000;" onclick="generateClassificationDataset()">Generate Classification Dataset</button>
+            <div id="cls-gen-status" class="hint"></div>
+            </div>
+
+            <div class="pipeline-panel pipeline-deinterleave">
+            <div class="pipeline-label deinterleave">⬤ Deinterleaving Pipeline</div>
+            <div class="card-title">Interleaved Dataset (Deinterleaving Demo)</div>
+            <div class="hint" style="margin-bottom: 8px;">Unrelated to the classifier above — random emitters for the deinterleaving/Live Simulation demo.</div>
+
+            <label>Simulation Duration (ns)</label>
+            <input type="number" id="dataset-sim-time" value="50000000" min="1000000" step="1000000">
+            <div class="definition">How much simulated receiver time to generate. Emitters pulse independently over this window, then get merged/sorted by time-of-arrival — this is also the exact dataset the Live Simulation page replays.</div>
+
+            <label>Number of Emitters</label>
+            <input type="number" id="il-num-emitters" value="4" min="1" max="20">
+
+            <label>Number of Distinct Classes</label>
+            <input type="number" id="il-num-classes" value="3" min="1" max="20">
+            <div class="definition">The real difficulty lever: when this is lower than Number of Emitters, some emitters share a class (identical signal "type," different physical instance) — much harder to deinterleave than emitters that are all obviously different.</div>
+
+            <details style="margin-top: 10px;">
+                <summary style="cursor: pointer; color: var(--accent-blue); font-size: 9pt; font-weight: bold; text-transform: uppercase;">Advanced: Population Ranges &amp; Seed</summary>
+                <label>Random Seed (blank = fresh each time)</label>
+                <input type="number" id="il-seed" placeholder="random">
+                <div class="form-grid" style="margin-top: 8px;">
+                    <div><label>Frequency Min (MHz)</label><input type="number" id="il-freq-min" value="3000"></div>
+                    <div><label>Frequency Max (MHz)</label><input type="number" id="il-freq-max" value="11000"></div>
+                    <div><label>Pulse Width Min (ns)</label><input type="number" id="il-pw-min" value="400"></div>
+                    <div><label>Pulse Width Max (ns)</label><input type="number" id="il-pw-max" value="1300"></div>
+                    <div><label>PRI Min (ns)</label><input type="number" id="il-pri-min" value="100000"></div>
+                    <div><label>PRI Max (ns)</label><input type="number" id="il-pri-max" value="700000"></div>
+                    <div><label>AOA Min (deg)</label><input type="number" id="il-aoa-min" value="0"></div>
+                    <div><label>AOA Max (deg)</label><input type="number" id="il-aoa-max" value="180"></div>
+                    <div><label>Rise Time Min (ns)</label><input type="number" id="il-rise-min" value="2"></div>
+                    <div><label>Rise Time Max (ns)</label><input type="number" id="il-rise-max" value="65"></div>
+                </div>
+            </details>
+
+            <button id="gen-interleaved-btn" style="background: #374151; color: white;" onclick="generateDataset()">Generate Interleaved Dataset</button>
+
+            <label style="margin-top: 15px;">Upload Dataset File</label>
+            <input type="file" id="dataset-file" accept=".csv" style="margin-top: 5px;">
+            <button id="upload-dataset-btn" style="background: #374151; color: white;" onclick="uploadDataset()">Upload Dataset</button>
+
+            <label style="margin-top: 15px;">Deinterleaving Method</label>
+            <select id="deinterleave-method">
+                <option value="classical" selected>Classical (DBSCAN over raw features)</option>
+                <option value="deep_metric">Deep Metric Learning (synthetic data with ground truth only)</option>
+            </select>
+            <div class="definition">Classical clusters directly on standardized frequency/pulse-width/AOA. Deep Metric Learning first trains a small embedding network (triplet loss, same idea as the classifier's metric head) on this dataset's own ground truth, then clusters in that learned space — closer to the 2025 published approach to this problem. Both are scored the same way (Adjusted Rand Index against ground truth), so you can directly compare them on the same dataset.</div>
+
+            <button style="background: var(--accent-purple); color: white;" onclick="runDeinterleave()">Run Deinterleaving Analysis</button>
+            <div id="deinterleave-result" style="margin-top: 8px;"></div>
+            </div>
+        </div>
+
+        <div class="page-content">
+            <div id="inspector-summary" class="status-line" style="margin-bottom: 12px;">No dataset inspected yet — generate or upload one.</div>
+
+            <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr 1fr; padding: 0;">
+                <div class="card inspector-card">
+                    <div class="card-title">Class Distribution</div>
+                    <div style="height:220px;"><canvas id="chart-classes"></canvas></div>
+                    <div class="definition">Row count per emitter class label in the current dataset.</div>
+                </div>
+                <div class="card inspector-card">
+                    <div class="card-title">Frequency Distribution</div>
+                    <div style="height:220px;"><canvas id="chart-freq"></canvas></div>
+                    <div class="definition">Histogram of carrier frequency (MHz) across all pulses in the dataset.</div>
+                </div>
+                <div class="card inspector-card">
+                    <div class="card-title">Pulse Width Distribution</div>
+                    <div style="height:220px;"><canvas id="chart-pw"></canvas></div>
+                    <div class="definition">Histogram of pulse width across all pulses in the dataset.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chartClasses = null, chartFreq = null, chartPw = null;
+
+        function renderBarChart(existing, canvasId, labels, values, color) {
+            if (existing) {
+                existing.data.labels = labels;
+                existing.data.datasets[0].data = values;
+                existing.update();
+                return existing;
+            }
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            return new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Count', data: values, backgroundColor: color }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        async function generateClassificationDataset() {
+            const statusEl = document.getElementById('cls-gen-status');
+            statusEl.innerText = 'Generating...';
+
+            const payload = {
+                num_classes: parseInt(document.getElementById('cls-num-classes').value) || 20,
+                num_holdout_classes: parseInt(document.getElementById('cls-holdout').value) || 3,
+                samples_per_class: parseInt(document.getElementById('cls-samples').value) || 200,
+                noise_pct: (parseFloat(document.getElementById('cls-noise-pct').value) || 0) / 100.0,
+                ranges: {
+                    freq_min_mhz: parseFloat(document.getElementById('cls-range-freq-min').value),
+                    freq_max_mhz: parseFloat(document.getElementById('cls-range-freq-max').value),
+                    pw_min_us: parseFloat(document.getElementById('cls-range-pw-min').value),
+                    pw_max_us: parseFloat(document.getElementById('cls-range-pw-max').value),
+                    pri_min_us: parseFloat(document.getElementById('cls-range-pri-min').value),
+                    pri_max_us: parseFloat(document.getElementById('cls-range-pri-max').value),
+                    rssi_min_dbm: parseFloat(document.getElementById('cls-range-rssi-min').value),
+                    rssi_max_dbm: parseFloat(document.getElementById('cls-range-rssi-max').value),
+                    rise_min_ns: parseFloat(document.getElementById('cls-range-rise-min').value),
+                    rise_max_ns: parseFloat(document.getElementById('cls-range-rise-max').value),
+                }
+            };
+
+            const resp = await fetch('/api/dataset/generate_classification', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+            if (!resp.ok) {
+                statusEl.innerText = 'Failed to generate classification dataset.';
+                return;
+            }
+
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'classification_dataset.csv';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+            await refreshInspector('classification', 'classification_dataset.csv');
+            statusEl.innerText = 'Generated — ready for Train Model on the Training page.';
+        }
+
+        async function generateDataset() {
+            const simTimeNs = parseInt(document.getElementById('dataset-sim-time').value) || 50000000;
+            const seedVal = document.getElementById('il-seed').value;
+
+            const payload = {
+                simulation_time_ns: simTimeNs,
+                num_emitters: parseInt(document.getElementById('il-num-emitters').value) || 4,
+                num_classes: parseInt(document.getElementById('il-num-classes').value) || 3,
+                seed: seedVal === '' ? null : parseInt(seedVal),
+                ranges: {
+                    freq_min_mhz: parseFloat(document.getElementById('il-freq-min').value),
+                    freq_max_mhz: parseFloat(document.getElementById('il-freq-max').value),
+                    pw_min_ns: parseFloat(document.getElementById('il-pw-min').value),
+                    pw_max_ns: parseFloat(document.getElementById('il-pw-max').value),
+                    pri_min_ns: parseFloat(document.getElementById('il-pri-min').value),
+                    pri_max_ns: parseFloat(document.getElementById('il-pri-max').value),
+                    aoa_min_deg: parseFloat(document.getElementById('il-aoa-min').value),
+                    aoa_max_deg: parseFloat(document.getElementById('il-aoa-max').value),
+                    rise_min_ns: parseFloat(document.getElementById('il-rise-min').value),
+                    rise_max_ns: parseFloat(document.getElementById('il-rise-max').value),
+                }
+            };
+
+            const resp = await fetch('/api/dataset/generate', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+            if (!resp.ok) return alert("Failed to generate dataset");
+
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "synthetic_radar_pdws_v2.csv";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+            await refreshInspector('generated', 'synthetic_radar_pdws_v2.csv');
+            alert(`Interleaved dataset generated (${payload.num_emitters} emitters, ${payload.num_classes} classes, ${simTimeNs} ns simulated) and downloaded!`);
+        }
+
+        async function uploadDataset() {
+            const fileInput = document.getElementById('dataset-file');
+            if (!fileInput.files.length) return alert("Select a file first");
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            const resp = await fetch('/api/dataset/upload', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (data.status === 'success') {
+                await refreshInspector('uploaded', data.filename);
+            }
+            alert("Dataset successfully uploaded!");
+        }
+
+        async function refreshInspector(source, filename) {
+            const params = new URLSearchParams({ source });
+            if (filename) params.set('filename', filename);
+            const resp = await fetch(`/api/dataset/inspect?${params}`);
+            const data = await resp.json();
+            if (data.status !== 'success') {
+                document.getElementById('inspector-summary').innerText = data.message || 'Inspection failed.';
+                return;
+            }
+            const isClassifier = source === 'classification';
+            const badge = isClassifier
+                ? '<span class="source-badge classifier">Classifier Pipeline</span>'
+                : '<span class="source-badge deinterleave">Deinterleaving Pipeline</span>';
+            document.getElementById('inspector-summary').innerHTML =
+                `${data.filename}: ${data.total_rows} rows${data.label_column ? ` (grouped by ${data.label_column})` : ''}${badge}`;
+            document.querySelectorAll('.inspector-card').forEach(el => {
+                el.classList.toggle('classifier', isClassifier);
+                el.classList.toggle('deinterleave', !isClassifier);
+            });
+
+            chartClasses = renderBarChart(chartClasses, 'chart-classes',
+                Object.keys(data.class_counts), Object.values(data.class_counts), '#10b981');
+
+            if (data.histograms.frequency_mhz) {
+                chartFreq = renderBarChart(chartFreq, 'chart-freq',
+                    data.histograms.frequency_mhz.labels, data.histograms.frequency_mhz.counts, '#00d2ff');
+            }
+            if (data.histograms.pulse_width) {
+                chartPw = renderBarChart(chartPw, 'chart-pw',
+                    data.histograms.pulse_width.labels, data.histograms.pulse_width.counts, '#f59e0b');
+            }
+        }
+
+        const deinterleaveResults = {};  // keyed by method, so running both stays visible for comparison
+
+        async function runDeinterleave() {
+            const method = document.getElementById('deinterleave-method').value;
+            const resultEl = document.getElementById('deinterleave-result');
+            resultEl.innerText = method === 'deep_metric'
+                ? 'Training embedding network and clustering...'
+                : 'Running clustering-based deinterleaving...';
+
+            const resp = await fetch('/api/deinterleave', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ method })
+            });
+            const data = await resp.json();
+            if (data.status !== 'success') {
+                resultEl.innerText = data.message || 'Deinterleaving failed.';
+                return;
+            }
+            deinterleaveResults[method] = data;
+            renderDeinterleaveResults();
+        }
+
+        function renderDeinterleaveResults() {
+            const resultEl = document.getElementById('deinterleave-result');
+            const methodLabels = { classical: 'Classical (DBSCAN)', deep_metric: 'Deep Metric Learning' };
+            let html = '<div style="overflow-x:auto;"><table class="eda-table" style="width:100%;"><thead><tr><th>Method</th><th>Predicted Tracks</th><th>True Emitters</th><th>Adjusted Rand Index</th><th>Noise Pulses</th></tr></thead><tbody>';
+            for (const [method, data] of Object.entries(deinterleaveResults)) {
+                html += `<tr>
+                    <td>${methodLabels[method] || method}</td>
+                    <td>${data.predicted_tracks}</td>
+                    <td>${data.true_emitters ?? 'N/A'}</td>
+                    <td><b>${data.adjusted_rand_index ?? 'N/A'}</b></td>
+                    <td>${data.noise_pulses}</td>
+                </tr>`;
+            }
+            html += '</tbody></table></div>';
+            if (Object.keys(deinterleaveResults).length < 2) {
+                html += '<div class="hint" style="margin-top:6px;">Run the other method too (same dataset) to compare both side by side.</div>';
+            }
+            resultEl.innerHTML = html;
+        }
+
+        async function applyReadOnlyMode() {
+            try {
+                const cfg = await (await fetch('/api/config')).json();
+                if (!cfg.read_only) return;
+                document.getElementById('readonly-badge').style.display = '';
+                for (const id of ['gen-classification-btn', 'gen-interleaved-btn', 'upload-dataset-btn']) {
+                    const el = document.getElementById(id);
+                    el.disabled = true;
+                    el.title = 'Disabled — read-only demo deployment';
+                }
+            } catch (e) { /* config fetch failed — leave controls as-is */ }
+        }
+
+        // Try to show whatever's already on disk when the page loads.
+        refreshInspector('generated', null).catch(() => {});
+        applyReadOnlyMode();
+    </script>
+</body>
+</html>

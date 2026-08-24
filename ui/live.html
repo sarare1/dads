@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SOSA EW Platform — Live Simulation</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/shared.css">
+    <style>
+        /* Operator-console layout: aggregate situational-awareness tiles + a scrolling threat
+           log are the PRIMARY view (what a real EW console leads with — see AN/SLQ-32 DCC
+           human-factors research: operators need to track multiple concurrent emitters, not
+           just the single latest reading). The technical charts (classifier confidence,
+           Qdrant distance trend) are demoted to a secondary column — genuinely useful for a
+           technical/PhD audience, but "why" rather than "what," per ISA-101's display
+           hierarchy (overview first, diagnostic detail second). */
+        .stats-row {
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+            padding: 15px 15px 0 15px;
+        }
+        .stat-tile {
+            background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 6px;
+            padding: 12px; text-align: center; cursor: pointer;
+        }
+        .stat-tile:hover { border-color: var(--accent-blue); }
+        .stat-tile .value { font-size: 20pt; font-weight: bold; }
+        .stat-tile .label { font-size: 8pt; color: #9ca3af; text-transform: uppercase; margin-top: 4px; }
+        .stat-tile.total .value { color: var(--accent-blue); }
+        .stat-tile.known .value { color: #34d399; }
+        .stat-tile.unknown .value { color: #fcd34d; }
+        .stat-tile.rejected .value { color: #fca5a5; }
+        .stat-tile.accuracy .value { color: var(--accent-purple); }
+
+        .live-main-grid {
+            display: grid; grid-template-columns: 2fr 1fr; gap: 15px;
+            padding: 15px; flex: 1; overflow: hidden; min-height: 0;
+        }
+        .threat-log-card { display: flex; flex-direction: column; overflow: hidden; }
+        .threat-log-scroll { flex: 1; overflow-y: auto; }
+        table.threat-log { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+        table.threat-log th {
+            position: sticky; top: 0; background: var(--panel-bg); color: var(--accent-blue);
+            text-transform: uppercase; font-size: 7.5pt; padding: 6px 8px; text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        table.threat-log td { padding: 5px 8px; border-bottom: 1px solid #1f2937; white-space: nowrap; }
+        table.threat-log tr.row-green td:first-child { border-left: 3px solid #34d399; }
+        table.threat-log tr.row-orange td:first-child { border-left: 3px solid #fcd34d; }
+        table.threat-log tr.row-red td:first-child { border-left: 3px solid #fca5a5; }
+        .verdict-chip {
+            display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 7.5pt;
+            font-weight: bold; text-transform: uppercase;
+        }
+        .verdict-chip.green { background: #064e3b; color: #34d399; }
+        .verdict-chip.orange { background: #78350f; color: #fcd34d; }
+        .verdict-chip.red { background: #7f1d1d; color: #fca5a5; }
+        .side-panels { display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+        .side-panels .card { flex: 0 0 auto; }
+        .source-select-wrap { display: flex; align-items: center; gap: 6px; margin-right: 10px; }
+        .source-select-wrap select { width: auto; margin-top: 0; padding: 6px 8px; font-size: 8.5pt; }
+
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+            z-index: 100; align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-panel {
+            background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 20px; width: 560px; max-width: 90vw; max-height: 85vh; overflow-y: auto;
+            position: relative;
+        }
+        .modal-panel .form-grid { max-width: none; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+        .modal-actions button { margin-top: 0; }
+        .modal-close-x {
+            position: absolute; top: 10px; right: 14px; width: 26px; height: 26px;
+            display: flex; align-items: center; justify-content: center;
+            background: transparent; border: none; color: #9ca3af; font-size: 16pt;
+            line-height: 1; cursor: pointer; padding: 0; margin: 0; border-radius: 4px;
+        }
+        .modal-close-x:hover { color: white; background: #374151; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>SOSA EW Open-Set Recognition Platform</h1>
+        <div style="display:flex; align-items:center;">
+            <div class="source-select-wrap">
+                <label style="margin:0; font-size:8pt; color:#9ca3af;">Replay:</label>
+                <select id="replay-source" onchange="onSourceChange()">
+                    <option value="interleaved" selected>Interleaved Dataset (unverified)</option>
+                    <option value="classification">Classification Dataset (verifiable ground truth)</option>
+                    <option value="live_feed">Live Feed (continuous, unlabeled, max 15 min)</option>
+                </select>
+            </div>
+            <button id="ranges-btn" style="width:auto; margin-top:0; padding:8px 12px; font-size:9pt; background:#374151; color:white; display:none;" onclick="openRangesModal()">⚙ Advanced: Population Ranges</button>
+            <button id="sim-toggle-btn" style="width:auto; margin-top:0; padding:8px 16px; font-size:9pt;" onclick="toggleSimulation()">Start Live Simulation</button>
+            <span class="status-tag" id="conn-status">IDLE</span>
+            <span class="status-tag engine" id="engine-indicator">ENGINE: PYTORCH</span>
+            <span class="status-tag" id="prototype-indicator" style="background:#7f1d1d;color:#fca5a5;">PROTOTYPES: RANDOM (UNTRAINED)</span>
+        </div>
+    </header>
+    <nav class="top-nav">
+        <a href="/">Training</a>
+        <a href="/validation">Testing</a>
+        <a href="/inference">Inference</a>
+        <a href="/dataset">Dataset</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/live" class="active">Live Simulation</a>
+        <a href="/help">Help</a>
+    </nav>
+
+    <div class="modal-overlay" id="ranges-modal">
+        <div class="modal-panel">
+            <button class="modal-close-x" onclick="closeRangesModal()" title="Close">&times;</button>
+            <div class="card-title">Advanced: Population Ranges (Live Feed)</div>
+            <div class="hint" style="margin-bottom:10px;">Governs the freshly-generated, unlabeled pulses for the Live Feed replay mode only — nothing here is saved to disk or persisted, and it has no effect on the Interleaved/Classification replay modes.</div>
+
+            <label>Number of Classes (population diversity)</label>
+            <input type="number" id="lf-num-classes" value="20" min="2" max="100">
+
+            <label>Session Duration (minutes, max 15)</label>
+            <input type="number" id="lf-duration-min" value="5" min="1" max="15" step="1">
+
+            <div class="form-grid" style="margin-top: 10px;">
+                <div><label>Frequency Min (MHz)</label><input type="number" id="lf-freq-min" value="2000"></div>
+                <div><label>Frequency Max (MHz)</label><input type="number" id="lf-freq-max" value="18000"></div>
+                <div><label>Pulse Width Min (µs)</label><input type="number" id="lf-pw-min" value="0.5" step="0.1"></div>
+                <div><label>Pulse Width Max (µs)</label><input type="number" id="lf-pw-max" value="50"></div>
+                <div><label>PRI Min (µs)</label><input type="number" id="lf-pri-min" value="10"></div>
+                <div><label>PRI Max (µs)</label><input type="number" id="lf-pri-max" value="1000"></div>
+                <div><label>RSSI Min (dBm)</label><input type="number" id="lf-rssi-min" value="-80"></div>
+                <div><label>RSSI Max (dBm)</label><input type="number" id="lf-rssi-max" value="-20"></div>
+                <div><label>Rise Time Min (ns)</label><input type="number" id="lf-rise-min" value="5"></div>
+                <div><label>Rise Time Max (ns)</label><input type="number" id="lf-rise-max" value="150"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-tile total" ondblclick="showTileDetail('total')" title="Double-click for pulse details"><div class="value" id="stat-total">0</div><div class="label">Pulses Processed</div></div>
+        <div class="stat-tile known" ondblclick="showTileDetail('known')" title="Double-click for pulse details"><div class="value" id="stat-known">0</div><div class="label">Verified Known</div></div>
+        <div class="stat-tile unknown" ondblclick="showTileDetail('unknown')" title="Double-click for pulse details"><div class="value" id="stat-unknown">0</div><div class="label">Unknown Threats</div></div>
+        <div class="stat-tile rejected" ondblclick="showTileDetail('rejected')" title="Double-click for pulse details"><div class="value" id="stat-rejected">0</div><div class="label">Rejected / Noise</div></div>
+        <div class="stat-tile accuracy" id="stat-accuracy-tile" style="display:none;" ondblclick="showTileDetail('verifiable')" title="Double-click for pulse details"><div class="value" id="stat-accuracy">—</div><div class="label">Live Accuracy (verified)</div></div>
+    </div>
+
+    <div class="modal-overlay" id="detail-modal">
+        <div class="modal-panel" style="width:1080px;">
+            <button class="modal-close-x" onclick="closeDetailModal()" title="Close">&times;</button>
+            <div class="card-title" id="detail-modal-title">Pulse Detail</div>
+            <div class="hint" style="margin-bottom:10px;" id="detail-modal-hint"></div>
+            <div style="max-height:60vh; overflow-y:auto;">
+                <table class="threat-log" id="detail-table" style="width:100%;">
+                    <thead><tr>
+                        <th>Pulse</th><th>Predicted Class</th><th>Conf.</th><th>Verdict</th><th>ECM Action</th>
+                        <th>Freq (MHz)</th><th>PW (µs)</th><th>PRI (µs)</th><th>RSSI (dBm)</th><th>Rise Time (ns)</th>
+                        <th id="detail-correct-header" style="display:none;">Correct?</th>
+                    </tr></thead>
+                    <tbody id="detail-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="live-main-grid">
+        <div class="card threat-log-card">
+            <div class="card-title">Live Threat Log</div>
+            <div class="hint" style="margin-bottom:8px;">Most recent detections, newest first — the primary operator view. Individual pulse detail and technical diagnostics are in the panels on the right.</div>
+            <div class="threat-log-scroll">
+                <table class="threat-log" id="threat-log-table">
+                    <thead><tr>
+                        <th>Pulse</th><th>Predicted Class</th><th>Conf.</th><th>Verdict</th><th>ECM Action</th><th id="correct-header" style="display:none;">Correct?</th>
+                    </tr></thead>
+                    <tbody id="threat-log-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="side-panels">
+            <div class="card">
+                <div class="card-title">Current Pulse</div>
+                <div id="verdict-badge" class="verdict-box badge-green">IDLE — CLICK "START LIVE SIMULATION"</div>
+                <div class="telemetry-row"><span>Pulse ID:</span><b id="meta-pulse-id">0</b></div>
+                <div class="telemetry-row"><span>Carrier Frequency:</span><b id="pdw-freq">-</b></div>
+                <div class="telemetry-row"><span>Pulse Width:</span><b id="pdw-pw">-</b></div>
+                <div class="telemetry-row"><span>PRI (ΔToA):</span><b id="pdw-pri">-</b></div>
+            </div>
+            <div class="card">
+                <div class="card-title">Classifier Confidence</div>
+                <div style="height:150px;"><canvas id="chart-classifier"></canvas></div>
+            </div>
+            <div class="card">
+                <div class="card-title">Qdrant Metric Distance</div>
+                <div style="height:150px;"><canvas id="chart-qdrant"></canvas></div>
+                <div class="telemetry-row"><span>Nearest Prototype:</span><b id="db-nearest">-</b></div>
+                <div class="telemetry-row"><span>Frequency Band:</span><b id="db-band">-</b></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let counts = { total: 0, known: 0, unknown: 0, rejected: 0, correct: 0, verifiable: 0 };
+        const MAX_LOG_ROWS = 30;
+        let pulseHistory = [];
+        const MAX_HISTORY = 5000;
+        const SESSION_KEY = 'dads_live_session_v1';
+        const MAX_PERSISTED = 1000;
+        let saveCounter = 0;
+
+        const ctxClass = document.getElementById('chart-classifier').getContext('2d');
+        const chartClass = new Chart(ctxClass, {
+            type: 'bar',
+            data: { labels: ['--', '--', '--'], datasets: [{ label: 'Softmax Prob', data: [0, 0, 0], backgroundColor: '#00d2ff' }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 1 } }, plugins: { legend: { display: false } } }
+        });
+
+        const ctxQdrant = document.getElementById('chart-qdrant').getContext('2d');
+        const chartQdrant = new Chart(ctxQdrant, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Vector Distance', data: [], borderColor: '#f59e0b', fill: false, pointRadius: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+
+        function resetStats() {
+            counts = { total: 0, known: 0, unknown: 0, rejected: 0, correct: 0, verifiable: 0 };
+            pulseHistory = [];
+            document.getElementById('stat-total').innerText = '0';
+            document.getElementById('stat-known').innerText = '0';
+            document.getElementById('stat-unknown').innerText = '0';
+            document.getElementById('stat-rejected').innerText = '0';
+            document.getElementById('stat-accuracy').innerText = '—';
+            document.getElementById('threat-log-body').innerHTML = '';
+            try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+        }
+
+        function saveSession() {
+            try {
+                sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+                    source: document.getElementById('replay-source').value,
+                    counts: counts,
+                    pulseHistory: pulseHistory.slice(-MAX_PERSISTED),
+                }));
+            } catch (e) {
+                // Best-effort only (quota exceeded / storage unavailable) — never block the live view on it.
+            }
+        }
+
+        function restoreSession() {
+            let raw;
+            try { raw = sessionStorage.getItem(SESSION_KEY); } catch (e) { return; }
+            if (!raw) return;
+            let saved;
+            try { saved = JSON.parse(raw); } catch (e) { return; }
+            if (!saved || !Array.isArray(saved.pulseHistory) || saved.pulseHistory.length === 0) return;
+
+            pulseHistory = saved.pulseHistory;
+            counts = saved.counts || counts;
+
+            document.getElementById('replay-source').value = saved.source || 'interleaved';
+            onSourceChange();
+            const isClassification = saved.source === 'classification';
+            document.getElementById('correct-header').style.display = isClassification ? '' : 'none';
+            document.getElementById('stat-accuracy-tile').style.display = isClassification ? '' : 'none';
+
+            document.getElementById('stat-total').innerText = counts.total;
+            document.getElementById('stat-known').innerText = counts.known;
+            document.getElementById('stat-unknown').innerText = counts.unknown;
+            document.getElementById('stat-rejected').innerText = counts.rejected;
+            document.getElementById('stat-accuracy').innerText = counts.verifiable
+                ? `${((counts.correct / counts.verifiable) * 100).toFixed(1)}%` : '—';
+
+            for (const d of pulseHistory.slice(-MAX_LOG_ROWS)) addLogRow(d);
+
+            const last = pulseHistory[pulseHistory.length - 1];
+            chartClass.data.labels = last.classifier.top3.map(x => x.class);
+            chartClass.data.datasets[0].data = last.classifier.top3.map(x => x.prob);
+            chartClass.update();
+
+            const recentQdrant = pulseHistory.slice(-15);
+            chartQdrant.data.labels = recentQdrant.map(d => d.pulse_id);
+            chartQdrant.data.datasets[0].data = recentQdrant.map(d => d.qdrant_db.distance);
+            chartQdrant.update();
+
+            document.getElementById('db-nearest').innerText = last.qdrant_db.nearest_prototype;
+            document.getElementById('db-band').innerText = last.qdrant_db.freq_band || 'UNKNOWN (untrained)';
+            document.getElementById('pdw-freq').innerText = `${last.pdw_meta.carrier_freq_mhz} MHz`;
+            document.getElementById('pdw-pw').innerText = `${last.pdw_meta.pulse_width_us} µs`;
+            document.getElementById('pdw-pri').innerText = `${last.pdw_meta.pri_us} µs`;
+            document.getElementById('meta-pulse-id').innerText = last.pulse_id;
+
+            const badge = document.getElementById('verdict-badge');
+            badge.innerText = `${last.fusion_verdict.verdict} — session restored, click Start to resume live`;
+            badge.className = `verdict-box badge-${last.fusion_verdict.color.toLowerCase()}`;
+
+            if (last.inference_engine) {
+                document.getElementById('engine-indicator').innerText = `ENGINE: ${last.inference_engine.toUpperCase()}`;
+            }
+            const protoTag = document.getElementById('prototype-indicator');
+            if (last.qdrant_db.prototypes_trained) {
+                protoTag.innerText = 'PROTOTYPES: TRAINED';
+                protoTag.style.background = '#064e3b';
+                protoTag.style.color = '#34d399';
+            }
+
+            document.getElementById('conn-status').innerText = 'IDLE (restored)';
+        }
+
+        function onSourceChange() {
+            const isLiveFeed = document.getElementById('replay-source').value === 'live_feed';
+            document.getElementById('ranges-btn').style.display = isLiveFeed ? '' : 'none';
+        }
+
+        function openRangesModal() { document.getElementById('ranges-modal').classList.add('open'); }
+        function closeRangesModal() { document.getElementById('ranges-modal').classList.remove('open'); }
+
+        function toggleSimulation() {
+            if (ws) {
+                stopSimulation();
+            } else {
+                startSimulation();
+            }
+        }
+
+        function startSimulation() {
+            const source = document.getElementById('replay-source').value;
+            const isClassification = source === 'classification';
+            const isLiveFeed = source === 'live_feed';
+            document.getElementById('correct-header').style.display = isClassification ? '' : 'none';
+            document.getElementById('stat-accuracy-tile').style.display = isClassification ? '' : 'none';
+            document.getElementById('replay-source').disabled = true;
+            document.getElementById('ranges-btn').disabled = true;
+            resetStats();
+
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            let wsUrl = `${wsProtocol}//${location.host}/ws/telemetry?source=${encodeURIComponent(source)}`;
+            if (isLiveFeed) {
+                const durationSeconds = Math.min(15, Math.max(1, parseInt(document.getElementById('lf-duration-min').value) || 5)) * 60;
+                const params = new URLSearchParams({
+                    num_classes: document.getElementById('lf-num-classes').value || 20,
+                    duration_seconds: durationSeconds,
+                    freq_min_mhz: document.getElementById('lf-freq-min').value,
+                    freq_max_mhz: document.getElementById('lf-freq-max').value,
+                    pw_min_us: document.getElementById('lf-pw-min').value,
+                    pw_max_us: document.getElementById('lf-pw-max').value,
+                    pri_min_us: document.getElementById('lf-pri-min').value,
+                    pri_max_us: document.getElementById('lf-pri-max').value,
+                    rssi_min_dbm: document.getElementById('lf-rssi-min').value,
+                    rssi_max_dbm: document.getElementById('lf-rssi-max').value,
+                    rise_min_ns: document.getElementById('lf-rise-min').value,
+                    rise_max_ns: document.getElementById('lf-rise-max').value,
+                });
+                wsUrl += '&' + params.toString();
+            }
+
+            ws = new WebSocket(wsUrl);
+            document.getElementById('sim-toggle-btn').innerText = 'Stop Simulation';
+            document.getElementById('conn-status').innerText = 'STREAMING';
+            document.getElementById('verdict-badge').innerText = 'AWAITING FIRST PULSE...';
+            document.getElementById('verdict-badge').className = 'verdict-box badge-green';
+
+            ws.onmessage = handleTelemetryMessage;
+            ws.onclose = function() {
+                ws = null;
+                document.getElementById('sim-toggle-btn').innerText = 'Start Live Simulation';
+                document.getElementById('conn-status').innerText = 'IDLE';
+                document.getElementById('replay-source').disabled = false;
+                document.getElementById('ranges-btn').disabled = false;
+                saveSession();
+            };
+        }
+
+        function stopSimulation() {
+            if (ws) ws.close();
+        }
+
+        function formatMMSS(totalSeconds) {
+            const m = Math.floor(totalSeconds / 60);
+            const s = Math.floor(totalSeconds % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function addLogRow(data) {
+            const tbody = document.getElementById('threat-log-body');
+            const color = data.fusion_verdict.color.toLowerCase();
+            const tr = document.createElement('tr');
+            tr.className = `row-${color}`;
+            const correctCell = data.pdw_meta.is_correct !== undefined
+                ? `<td>${data.pdw_meta.is_correct ? '✅' : '❌'}</td>` : `<td style="display:none;"></td>`;
+            tr.innerHTML = `
+                <td>${data.pulse_id}</td>
+                <td>${data.classifier.top_class}</td>
+                <td>${(data.classifier.confidence * 100).toFixed(1)}%</td>
+                <td><span class="verdict-chip ${color}">${data.fusion_verdict.verdict}</span></td>
+                <td>${data.fusion_verdict.ecm_trigger}</td>
+                ${correctCell}
+            `;
+            tbody.insertBefore(tr, tbody.firstChild);
+            while (tbody.children.length > MAX_LOG_ROWS) tbody.removeChild(tbody.lastChild);
+        }
+
+        function updateStats(data) {
+            counts.total++;
+            document.getElementById('stat-total').innerText = counts.total;
+            const verdict = data.fusion_verdict.verdict;
+            if (verdict === 'VERIFIED_KNOWN_TARGET') counts.known++;
+            else if (verdict === 'UNKNOWN_THREAT_ANOMALY') counts.unknown++;
+            else counts.rejected++;
+            document.getElementById('stat-known').innerText = counts.known;
+            document.getElementById('stat-unknown').innerText = counts.unknown;
+            document.getElementById('stat-rejected').innerText = counts.rejected;
+
+            if (data.pdw_meta.is_correct !== undefined) {
+                counts.verifiable++;
+                if (data.pdw_meta.is_correct) counts.correct++;
+                document.getElementById('stat-accuracy').innerText =
+                    `${((counts.correct / counts.verifiable) * 100).toFixed(1)}%`;
+            }
+        }
+
+        function handleTelemetryMessage(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.error) {
+                document.getElementById('verdict-badge').innerText = data.error;
+                document.getElementById('verdict-badge').className = 'verdict-box badge-red';
+                return;
+            }
+            if (data.stream_complete) {
+                document.getElementById('verdict-badge').innerText =
+                    `REPLAY COMPLETE — ${data.total_rows} pulses from ${data.dataset_filename}`;
+                document.getElementById('verdict-badge').className = 'verdict-box badge-orange';
+                return;
+            }
+
+            chartClass.data.labels = data.classifier.top3.map(x => x.class);
+            chartClass.data.datasets[0].data = data.classifier.top3.map(x => x.prob);
+            chartClass.update();
+
+            document.getElementById('db-nearest').innerText = data.qdrant_db.nearest_prototype;
+            document.getElementById('db-band').innerText = data.qdrant_db.freq_band || 'UNKNOWN (untrained)';
+
+            if (chartQdrant.data.labels.length > 15) {
+                chartQdrant.data.labels.shift();
+                chartQdrant.data.datasets[0].data.shift();
+            }
+            chartQdrant.data.labels.push(data.pulse_id);
+            chartQdrant.data.datasets[0].data.push(data.qdrant_db.distance);
+            chartQdrant.update();
+
+            const badge = document.getElementById('verdict-badge');
+            badge.innerText = data.fusion_verdict.verdict;
+            badge.className = `verdict-box badge-${data.fusion_verdict.color.toLowerCase()}`;
+
+            if (data.total_rows) {
+                document.getElementById('meta-pulse-id').innerText = `${data.pulse_id} / ${data.total_rows}`;
+            } else if (data.duration_seconds) {
+                document.getElementById('meta-pulse-id').innerText =
+                    `${data.pulse_id} (${formatMMSS(data.elapsed_seconds)} / ${formatMMSS(data.duration_seconds)})`;
+            } else {
+                document.getElementById('meta-pulse-id').innerText = data.pulse_id;
+            }
+            document.getElementById('pdw-freq').innerText = `${data.pdw_meta.carrier_freq_mhz} MHz`;
+            document.getElementById('pdw-pw').innerText = `${data.pdw_meta.pulse_width_us} µs`;
+            document.getElementById('pdw-pri').innerText = `${data.pdw_meta.pri_us} µs`;
+
+            pulseHistory.push(data);
+            if (pulseHistory.length > MAX_HISTORY) pulseHistory.shift();
+
+            addLogRow(data);
+            updateStats(data);
+
+            saveCounter++;
+            if (saveCounter >= 5) { saveSession(); saveCounter = 0; }
+
+            if (data.inference_engine) {
+                document.getElementById('engine-indicator').innerText = `ENGINE: ${data.inference_engine.toUpperCase()}`;
+            }
+            const protoTag = document.getElementById('prototype-indicator');
+            if (data.qdrant_db.prototypes_trained) {
+                protoTag.innerText = 'PROTOTYPES: TRAINED';
+                protoTag.style.background = '#064e3b';
+                protoTag.style.color = '#34d399';
+            } else {
+                protoTag.innerText = 'PROTOTYPES: RANDOM (UNTRAINED)';
+                protoTag.style.background = '#7f1d1d';
+                protoTag.style.color = '#fca5a5';
+            }
+        }
+
+        function showTileDetail(category) {
+            let rows, title, hint;
+            if (category === 'total') {
+                rows = pulseHistory;
+                title = 'All Processed Pulses';
+                hint = `${rows.length} pulses processed this session (most recent ${MAX_HISTORY} retained).`;
+            } else if (category === 'known') {
+                rows = pulseHistory.filter(d => d.fusion_verdict.verdict === 'VERIFIED_KNOWN_TARGET');
+                title = 'Verified Known Pulses';
+                hint = `${rows.length} pulses matched a trained prototype within the distance threshold.`;
+            } else if (category === 'unknown') {
+                rows = pulseHistory.filter(d => d.fusion_verdict.verdict === 'UNKNOWN_THREAT_ANOMALY');
+                title = 'Unknown Threat Pulses';
+                hint = `${rows.length} pulses fell outside the known-class threshold (open-set detections).`;
+            } else if (category === 'rejected') {
+                rows = pulseHistory.filter(d =>
+                    d.fusion_verdict.verdict !== 'VERIFIED_KNOWN_TARGET' &&
+                    d.fusion_verdict.verdict !== 'UNKNOWN_THREAT_ANOMALY');
+                title = 'Rejected / Noise Pulses';
+                hint = `${rows.length} pulses rejected as noise or low-confidence detections.`;
+            } else { // verifiable / accuracy tile
+                rows = pulseHistory.filter(d => d.pdw_meta.is_correct !== undefined);
+                title = 'Verified Ground-Truth Pulses (Accuracy)';
+                hint = `${rows.length} pulses had known ground truth — ${counts.correct} correct (${counts.verifiable ? ((counts.correct / counts.verifiable) * 100).toFixed(1) : '0.0'}%).`;
+            }
+
+            const showCorrect = rows.length > 0 && rows[0].pdw_meta.is_correct !== undefined;
+            document.getElementById('detail-correct-header').style.display = showCorrect ? '' : 'none';
+            document.getElementById('detail-modal-title').innerText = title;
+            document.getElementById('detail-modal-hint').innerText = hint;
+
+            const tbody = document.getElementById('detail-table-body');
+            tbody.innerHTML = '';
+            const display = rows.slice(-1000).reverse(); // newest first, cap render for perf
+            for (const d of display) {
+                const color = d.fusion_verdict.color.toLowerCase();
+                const tr = document.createElement('tr');
+                tr.className = `row-${color}`;
+                const correctCell = d.pdw_meta.is_correct !== undefined
+                    ? `<td>${d.pdw_meta.is_correct ? '✅' : '❌'}</td>` : `<td style="display:none;"></td>`;
+                tr.innerHTML = `
+                    <td>${d.pulse_id}</td>
+                    <td>${d.classifier.top_class}</td>
+                    <td>${(d.classifier.confidence * 100).toFixed(1)}%</td>
+                    <td><span class="verdict-chip ${color}">${d.fusion_verdict.verdict}</span></td>
+                    <td>${d.fusion_verdict.ecm_trigger}</td>
+                    <td>${d.pdw_meta.carrier_freq_mhz}</td>
+                    <td>${d.pdw_meta.pulse_width_us}</td>
+                    <td>${d.pdw_meta.pri_us}</td>
+                    <td>${d.pdw_meta.rssi_dbm}</td>
+                    <td>${d.pdw_meta.rise_time_ns}</td>
+                    ${correctCell}
+                `;
+                tbody.appendChild(tr);
+            }
+            document.getElementById('detail-modal').classList.add('open');
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detail-modal').classList.remove('open');
+        }
+
+        window.addEventListener('beforeunload', saveSession);
+        restoreSession();
+    </script>
+</body>
+</html>

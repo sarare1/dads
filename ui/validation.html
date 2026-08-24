@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SOSA EW Platform — Testing</title>
+    <link rel="stylesheet" href="/static/shared.css">
+    <style>
+        table.history { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 10px; }
+        table.history th, table.history td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+        table.history th { color: var(--accent-blue); text-transform: uppercase; font-size: 8pt; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>SOSA EW Open-Set Recognition Platform</h1>
+        <span class="status-tag">TESTING</span>
+        <span class="status-tag" id="readonly-badge" style="display:none; background:#7c2d12; color:#fdba74;">READ-ONLY DEMO</span>
+    </header>
+    <nav class="top-nav">
+        <a href="/">Training</a>
+        <a href="/validation" class="active">Testing</a>
+        <a href="/inference">Inference</a>
+        <a href="/dataset">Dataset</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/live">Live Simulation</a>
+        <a href="/help">Help</a>
+    </nav>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="card-title">Test Dataset</div>
+            <div class="hint" style="margin-bottom: 10px;">
+                Testing evaluates against the model's own class taxonomy (RADAR_FAMILY_00–19)
+                with ground-truth labels — different from the Dataset page's interleaved CSV,
+                whose labels don't correspond to this classifier at all. Generate a
+                classification dataset on the <a href="/dataset" style="color:var(--accent-blue);">Dataset page</a>
+                first (that's also what Training trains on), then select it below — or edit/
+                replace its rows and re-upload your own version.
+            </div>
+
+            <label>Upload Test Dataset File</label>
+            <input type="file" id="test-file" accept=".csv" style="margin-top: 5px;">
+            <button id="upload-test-btn" style="background: #374151; color: white;" onclick="uploadTestDataset()">Upload Test Dataset</button>
+            <div id="upload-status" class="hint"></div>
+        </div>
+
+        <div class="page-content">
+            <div class="card" style="max-width: 900px;">
+                <div class="card-title">Held-Out Test Evaluation</div>
+                <div class="hint" style="margin-bottom: 12px;">
+                    The Training page's accuracy/AUROC come from the validation split baked into
+                    that training run. Testing draws on either an <b>uploaded dataset</b> (below,
+                    once one exists) or a <b>fresh auto-generated sample</b> — a sanity check that
+                    the model generalizes, not just fits one lucky split.
+                </div>
+
+                <label>If no dataset uploaded: samples per known class (auto-generated)</label>
+                <input type="number" id="test-samples" value="100" min="10" max="1000">
+
+                <label>Dataset Source</label>
+                <select id="test-source">
+                    <option value="auto" selected>Auto-generate fresh sample</option>
+                    <option value="generated">Use Dataset page's classification_dataset.csv</option>
+                    <option value="uploaded">Use last uploaded file</option>
+                </select>
+
+                <button onclick="runTest()">Run Test</button>
+                <div id="test-status" class="status-line"></div>
+                <div id="test-results" style="margin-top: 16px;"></div>
+            </div>
+
+            <div class="card" style="max-width: 900px; margin-top: 20px;">
+                <div class="card-title">Test History — Compare Runs</div>
+                <div id="history-summary" class="hint">Loading...</div>
+                <div style="overflow-x: auto;">
+                    <table class="history" id="history-table"></table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let lastUploadedFilename = null;
+
+        async function uploadTestDataset() {
+            const fileInput = document.getElementById('test-file');
+            if (!fileInput.files.length) return alert('Select a file first');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            const resp = await fetch('/api/test/upload', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (data.status === 'success') {
+                lastUploadedFilename = data.filename;
+                document.getElementById('upload-status').innerText = `Uploaded: ${data.filename}`;
+                document.getElementById('test-source').value = 'uploaded';
+            } else {
+                document.getElementById('upload-status').innerText = 'Upload failed.';
+            }
+        }
+
+        async function runTest() {
+            const samplesPerClass = parseInt(document.getElementById('test-samples').value) || 100;
+            const source = document.getElementById('test-source').value;
+            const statusEl = document.getElementById('test-status');
+            const resultsEl = document.getElementById('test-results');
+
+            statusEl.innerText = 'Evaluating...';
+            resultsEl.innerHTML = '';
+
+            const payload = { samples_per_class: samplesPerClass };
+            if (source === 'generated') {
+                payload.dataset_source = 'generated';
+                payload.dataset_filename = 'classification_dataset.csv';
+            } else if (source === 'uploaded') {
+                if (!lastUploadedFilename) {
+                    statusEl.innerText = 'No uploaded file yet — upload one first, or switch to auto-generate.';
+                    return;
+                }
+                payload.dataset_source = 'uploaded';
+                payload.dataset_filename = lastUploadedFilename;
+            }
+
+            const resp = await fetch('/api/test', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+
+            if (data.status !== 'success') {
+                statusEl.innerText = data.message || 'Test failed.';
+                return;
+            }
+
+            const m = data.metrics;
+            const r = data.run;
+            statusEl.innerText = `Evaluated against: ${r.dataset_source}`;
+            resultsEl.innerHTML = `
+                <div class="dashboard-grid" style="grid-template-columns: repeat(2, 1fr); padding: 0; gap: 12px;">
+                    <div class="metric-block">
+                        <div class="metric-value">${(m.closed_set_accuracy * 100).toFixed(1)}%</div>
+                        <div class="metric-label">Test Closed-Set Accuracy</div>
+                    </div>
+                    <div class="metric-block">
+                        <div class="metric-value">${m.open_set_auroc !== null ? m.open_set_auroc.toFixed(3) : 'N/A'}</div>
+                        <div class="metric-label">Test Open-Set AUROC</div>
+                    </div>
+                </div>
+                <div class="telemetry-row"><span>Backbone:</span><b>${r.backbone_type}</b></div>
+                <div class="telemetry-row"><span>Distance Metric:</span><b>${r.distance_metric}</b></div>
+                <div class="telemetry-row"><span>Inference Engine:</span><b>${r.inference_engine}</b></div>
+                <div class="telemetry-row"><span>Qdrant (HNSW M / ef_construct / quant):</span><b>${r.hnsw_m} / ${r.hnsw_ef_construct} / ${r.quantization}</b></div>
+                <div class="telemetry-row"><span>Known / Holdout Classes:</span><b>${r.num_known_classes} / ${r.num_holdout_classes}</b></div>
+                ${data.sample_filename ? `<div class="hint" style="margin-top:8px;"><a href="/api/test/sample" style="color:var(--accent-blue);">View / download the exact generated sample</a> this run was scored against — includes ground-truth labels for your own inspection, never fed to the model as input.</div>` : ''}
+                <div class="hint">Full definitions on the <a href="/help" style="color:var(--accent-blue);">Help</a> page.</div>
+            `;
+            await loadHistory();
+        }
+
+        async function loadHistory() {
+            const resp = await fetch('/api/test/history');
+            const data = await resp.json();
+            const runs = data.runs || [];
+
+            document.getElementById('history-summary').innerText =
+                runs.length === 0 ? 'No test runs yet.' : `${runs.length} run(s) recorded.`;
+
+            const table = document.getElementById('history-table');
+            if (runs.length === 0) { table.innerHTML = ''; return; }
+
+            const headers = ['Timestamp (IST)', 'Backbone', 'Distance', 'Engine', 'Dataset Source', 'Known', 'Holdout', 'Accuracy', 'AUROC'];
+            let html = '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+            for (const r of runs) {
+                html += `<tr>
+                    <td>${r.timestamp_ist}</td>
+                    <td>${r.backbone_type}</td>
+                    <td>${r.distance_metric}</td>
+                    <td>${r.inference_engine}</td>
+                    <td>${r.dataset_source}</td>
+                    <td>${r.num_known_classes}</td>
+                    <td>${r.num_holdout_classes}</td>
+                    <td>${(r.closed_set_accuracy * 100).toFixed(1)}%</td>
+                    <td>${r.open_set_auroc !== null ? Number(r.open_set_auroc).toFixed(3) : 'N/A'}</td>
+                </tr>`;
+            }
+            table.innerHTML = html;
+        }
+
+        async function applyReadOnlyMode() {
+            try {
+                const cfg = await (await fetch('/api/config')).json();
+                if (!cfg.read_only) return;
+                document.getElementById('readonly-badge').style.display = '';
+                const el = document.getElementById('upload-test-btn');
+                el.disabled = true;
+                el.title = 'Disabled — read-only demo deployment';
+            } catch (e) { /* config fetch failed — leave controls as-is */ }
+        }
+
+        loadHistory();
+        applyReadOnlyMode();
+    </script>
+</body>
+</html>

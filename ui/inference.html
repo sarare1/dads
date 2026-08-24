@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SOSA EW Platform — Inference</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/shared.css">
+</head>
+<body>
+
+    <header>
+        <h1>SOSA EW Open-Set Recognition Platform</h1>
+        <span class="status-tag">INFERENCE</span>
+    </header>
+    <nav class="top-nav">
+        <a href="/">Training</a>
+        <a href="/validation">Testing</a>
+        <a href="/inference" class="active">Inference</a>
+        <a href="/dataset">Dataset</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/live">Live Simulation</a>
+        <a href="/help">Help</a>
+    </nav>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="card-title">Manual Pulse Input</div>
+            <div class="hint" style="margin-bottom:10px;">Enter a single Pulse Descriptor Word by hand and run it through the current model + Qdrant prototypes — the same pipeline the Live Simulation page streams continuously.</div>
+
+            <label>Carrier Frequency (MHz)</label>
+            <input type="number" id="in-freq" value="9200" step="1">
+            <div class="definition">Spectral position of the emitted signal. The training data spans roughly 2,000–18,000 MHz across known classes.</div>
+
+            <label>Pulse Width (µs)</label>
+            <input type="number" id="in-pw" value="1.2" step="0.1">
+            <div class="definition">Duration of a single transmitted pulse. Known classes range roughly 0.5–50 µs; very short pulses (&lt;0.5 µs) resemble the simulated "unknown agile threat" profile.</div>
+
+            <label>PRI (µs)</label>
+            <input type="number" id="in-pri" value="500" step="1">
+            <div class="definition">Pulse Repetition Interval — time between this pulse and the previous one from the same emitter. Known classes range roughly 10–1000 µs.</div>
+
+            <label>RSSI (dBm)</label>
+            <input type="number" id="in-rssi" value="-40" step="1">
+            <div class="definition">Received signal strength. Known classes range roughly -80 to -20 dBm.</div>
+
+            <label>Rise Time (ns)</label>
+            <input type="number" id="in-rise" value="40" step="1">
+            <div class="definition">How fast the pulse reaches full amplitude — a hardware fingerprint. Known classes range roughly 5–150 ns.</div>
+
+            <button onclick="runInference()">Run Inference</button>
+        </div>
+
+        <div class="page-content">
+            <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="card">
+                    <div class="card-title">Classifier Output</div>
+                    <div style="height:220px;"><canvas id="chart-infer"></canvas></div>
+                    <div class="definition" style="margin-top:10px;">Softmax probability the model assigns to its top-3 predicted radar families for this single input.</div>
+                </div>
+                <div class="card">
+                    <div id="infer-verdict" class="verdict-box badge-green">RUN INFERENCE TO SEE A RESULT</div>
+                    <div class="telemetry-row"><span>Predicted Class:</span><b id="infer-class">-</b></div>
+                    <div class="telemetry-row"><span>Confidence:</span><b id="infer-conf">-</b></div>
+                    <div class="telemetry-row"><span>Nearest Prototype:</span><b id="infer-nearest">-</b></div>
+                    <div class="telemetry-row"><span>Frequency Band:</span><b id="infer-band">-</b></div>
+                    <div class="telemetry-row"><span>Metric Distance:</span><b id="infer-dist">-</b></div>
+                    <div class="telemetry-row"><span>Inference Engine:</span><b id="infer-engine">-</b></div>
+                    <div class="telemetry-row"><span>Automated ECM Action:</span><b id="infer-ecm" style="color:var(--accent-orange);">-</b></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('chart-infer').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: ['--', '--', '--'], datasets: [{ label: 'Softmax Prob', data: [0, 0, 0], backgroundColor: '#00d2ff' }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 1 } } }
+        });
+
+        async function runInference() {
+            const payload = {
+                carrier_freq_mhz: parseFloat(document.getElementById('in-freq').value),
+                pulse_width_us: parseFloat(document.getElementById('in-pw').value),
+                pri_us: parseFloat(document.getElementById('in-pri').value),
+                rssi_dbm: parseFloat(document.getElementById('in-rssi').value),
+                rise_time_ns: parseFloat(document.getElementById('in-rise').value)
+            };
+            const resp = await fetch('/api/infer', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (data.status !== 'success') {
+                alert(data.message || 'Inference failed');
+                return;
+            }
+            const r = data.result;
+
+            chart.data.labels = r.classifier.top3.map(x => x.class);
+            chart.data.datasets[0].data = r.classifier.top3.map(x => x.prob);
+            chart.update();
+
+            const badge = document.getElementById('infer-verdict');
+            badge.innerText = r.fusion_verdict.verdict;
+            badge.className = `verdict-box badge-${r.fusion_verdict.color.toLowerCase()}`;
+
+            document.getElementById('infer-class').innerText = r.classifier.top_class;
+            document.getElementById('infer-conf').innerText = r.classifier.confidence;
+            document.getElementById('infer-nearest').innerText = r.qdrant_db.nearest_prototype;
+            document.getElementById('infer-band').innerText = r.qdrant_db.freq_band || 'UNKNOWN (untrained)';
+            document.getElementById('infer-dist').innerText = r.qdrant_db.distance;
+            document.getElementById('infer-engine').innerText = r.inference_engine.toUpperCase();
+            document.getElementById('infer-ecm').innerText = r.fusion_verdict.ecm_trigger;
+        }
+    </script>
+</body>
+</html>

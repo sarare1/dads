@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SOSA EW Platform — Help</title>
+    <link rel="stylesheet" href="/static/shared.css">
+</head>
+<body>
+
+    <header>
+        <h1>SOSA EW Open-Set Recognition Platform</h1>
+        <span class="status-tag">HELP</span>
+    </header>
+    <nav class="top-nav">
+        <a href="/">Training</a>
+        <a href="/validation">Testing</a>
+        <a href="/inference">Inference</a>
+        <a href="/dataset">Dataset</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/live">Live Simulation</a>
+        <a href="/help" class="active">Help</a>
+    </nav>
+
+    <div class="page-content" style="max-width: 900px;">
+
+        <div class="glossary-section">
+            <h2>Acronym Quick Reference</h2>
+            <div class="hint" style="margin-bottom:10px;">Every abbreviation used anywhere on this platform, in one place. Each is also defined in context in the sections below.</div>
+            <table class="eda-table">
+                <thead><tr><th>Acronym</th><th style="text-align:left;">Full Form</th></tr></thead>
+                <tbody>
+                    <tr><td>SOSA</td><td style="text-align:left;">Sensor Open Systems Architecture — the modular open-standard architecture this platform is aligned to.</td></tr>
+                    <tr><td>EW</td><td style="text-align:left;">Electronic Warfare</td></tr>
+                    <tr><td>ESM</td><td style="text-align:left;">Electronic Support Measures — the passive-intercept discipline this whole platform simulates.</td></tr>
+                    <tr><td>ELINT</td><td style="text-align:left;">Electronic Intelligence — intelligence gathered from intercepted non-communication signals (e.g. radar)</td></tr>
+                    <tr><td>ECM</td><td style="text-align:left;">Electronic Countermeasures — active response actions taken against a detected threat</td></tr>
+                    <tr><td>RWR</td><td style="text-align:left;">Radar Warning Receiver — the class of operator display this platform's Live Simulation page is modeled on</td></tr>
+                    <tr><td>PDW</td><td style="text-align:left;">Pulse Descriptor Word — the per-pulse measurement record (frequency, width, timing, power, etc.)</td></tr>
+                    <tr><td>ToA</td><td style="text-align:left;">Time of Arrival</td></tr>
+                    <tr><td>PRI</td><td style="text-align:left;">Pulse Repetition Interval</td></tr>
+                    <tr><td>PRF</td><td style="text-align:left;">Pulse Repetition Frequency (= 1 / PRI)</td></tr>
+                    <tr><td>PW</td><td style="text-align:left;">Pulse Width</td></tr>
+                    <tr><td>RSSI</td><td style="text-align:left;">Received Signal Strength Indicator</td></tr>
+                    <tr><td>AOA</td><td style="text-align:left;">Angle of Arrival</td></tr>
+                    <tr><td>fc</td><td style="text-align:left;">Carrier frequency (symbol, not an acronym)</td></tr>
+                    <tr><td>OOD</td><td style="text-align:left;">Out-of-Distribution — data unlike anything the model was trained on</td></tr>
+                    <tr><td>ARI</td><td style="text-align:left;">Adjusted Rand Index</td></tr>
+                    <tr><td>ROC</td><td style="text-align:left;">Receiver Operating Characteristic (curve)</td></tr>
+                    <tr><td>AUROC</td><td style="text-align:left;">Area Under the ROC Curve</td></tr>
+                    <tr><td>RPL</td><td style="text-align:left;">Reciprocal Points Learning</td></tr>
+                    <tr><td>ARPL</td><td style="text-align:left;">Adversarial Reciprocal Points Learning</td></tr>
+                    <tr><td>DBSCAN</td><td style="text-align:left;">Density-Based Spatial Clustering of Applications with Noise</td></tr>
+                    <tr><td>CDIF</td><td style="text-align:left;">Cumulative Difference Histogram — a classical PRI-transform deinterleaving technique</td></tr>
+                    <tr><td>SDIF</td><td style="text-align:left;">Sequential Difference Histogram — a classical PRI-transform deinterleaving technique</td></tr>
+                    <tr><td>HNSW</td><td style="text-align:left;">Hierarchical Navigable Small World — the graph index Qdrant uses for vector search</td></tr>
+                    <tr><td>SQ8</td><td style="text-align:left;">Scalar Quantization to 8-bit integers</td></tr>
+                    <tr><td>PCA</td><td style="text-align:left;">Principal Component Analysis</td></tr>
+                    <tr><td>CNN</td><td style="text-align:left;">Convolutional Neural Network</td></tr>
+                    <tr><td>MLP</td><td style="text-align:left;">Multi-Layer Perceptron</td></tr>
+                    <tr><td>ONNX</td><td style="text-align:left;">Open Neural Network Exchange — a portable trained-model file format</td></tr>
+                    <tr><td>DB</td><td style="text-align:left;">Database</td></tr>
+                    <tr><td>GPU / CPU</td><td style="text-align:left;">Graphics / Central Processing Unit</td></tr>
+                    <tr><td>C-SWaP</td><td style="text-align:left;">Cost, Size, Weight, and Power — the constraint budget edge/embedded EW hardware is designed against</td></tr>
+                    <tr><td>ISA-101</td><td style="text-align:left;">International Society of Automation's Human-Machine Interface design standard (display hierarchy: overview first, diagnostic detail second)</td></tr>
+                    <tr><td>AN/SLQ-32</td><td style="text-align:left;">A U.S. Navy shipboard EW system; not an acronym (AN/ is the Army-Navy joint electronic equipment designation prefix) — its operator-console human-factors research informed this platform's Live Simulation layout</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="glossary-section">
+            <h2>PDW (Pulse Descriptor Word) Fields</h2>
+            <div class="glossary-term">Carrier Frequency (fc)</div>
+            <div class="glossary-def">The radio frequency the pulse was transmitted on, in MHz (megahertz). Used for spectral band mapping and detecting frequency-agile emitters.</div>
+            <div class="glossary-term">Pulse Width (PW)</div>
+            <div class="glossary-def">How long a single pulse lasts, in microseconds (µs) — or nanoseconds (ns) in the Interleaved Dataset generator, which works at finer time resolution. Helps isolate the emitter's modulation mode.</div>
+            <div class="glossary-term">PRI (Pulse Repetition Interval, ΔToA)</div>
+            <div class="glossary-def">Time between consecutive pulses from the same emitter, in microseconds (or nanoseconds for the Interleaved Dataset). Reveals the emitter's timing pattern — see PRI Modulation Patterns below.</div>
+            <div class="glossary-term">PRF (Pulse Repetition Frequency)</div>
+            <div class="glossary-def">The reciprocal of PRI (PRF = 1 / PRI), in Hz — how many pulses per second the emitter transmits. Shown on the Analytics page as an alternative view of the same timing information PRI carries.</div>
+            <div class="glossary-term">RSSI (Received Signal Strength Indicator)</div>
+            <div class="glossary-def">Received power of the pulse, in dBm (decibel-milliwatts). Also labeled "Amplitude" in some raw dataset columns — same quantity.</div>
+            <div class="glossary-term">Time of Arrival (ToA)</div>
+            <div class="glossary-def">Precise timestamp the pulse was received, in nanoseconds. Used to reconstruct interleaved pulse trains from multiple emitters (deinterleaving) and to derive PRI as the delta between consecutive ToAs.</div>
+            <div class="glossary-term">Rise Time</div>
+            <div class="glossary-def">How quickly the pulse reaches full amplitude, in nanoseconds — a subtle transmitter hardware fingerprint.</div>
+            <div class="glossary-term">Angle of Arrival (AOA)</div>
+            <div class="glossary-def">The bearing, in degrees, the pulse's wavefront arrived from (as measured by a hypothetical multi-element receiver array). Used only by the Interleaved Dataset's classical (DBSCAN) deinterleaving method as an extra clustering feature — the Classification Dataset does not use it, since AOA identifies platform bearing, not emitter identity.</div>
+            <div class="glossary-term">Duty Cycle</div>
+            <div class="glossary-def">Percentage of time the emitter is actually transmitting: (Pulse Width / PRI) × 100. Low duty cycle (search radars, long PRI) vs. high duty cycle (illumination/track radars, short PRI) is itself a strong Operating Mode signal, shown on the Analytics page.</div>
+            <div class="glossary-term">Inter-Pulse Interval (raw stream)</div>
+            <div class="glossary-def">The literal ToA gap between any two consecutive pulses in the raw, interleaved (multi-emitter) receive stream — not the same as PRI, which is the gap between two pulses from the <i>same</i> emitter. Deinterleaving is precisely the problem of recovering per-emitter PRI out of this mixed raw sequence.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Radar Frequency Bands</h2>
+            <div class="hint" style="margin-bottom:10px;">Standard IEEE radar band letter designations, used throughout the platform (Qdrant prototype metadata, Analytics' band breakdown, this help page's own examples).</div>
+            <table class="eda-table">
+                <thead><tr><th>Band</th><th style="text-align:left;">Frequency Range</th></tr></thead>
+                <tbody>
+                    <tr><td>L-BAND</td><td style="text-align:left;">&lt; 2,000 MHz</td></tr>
+                    <tr><td>S-BAND</td><td style="text-align:left;">2,000 – 4,000 MHz</td></tr>
+                    <tr><td>C-BAND</td><td style="text-align:left;">4,000 – 8,000 MHz</td></tr>
+                    <tr><td>X-BAND</td><td style="text-align:left;">8,000 – 12,000 MHz</td></tr>
+                    <tr><td>KU-BAND</td><td style="text-align:left;">12,000 – 18,000 MHz</td></tr>
+                    <tr><td>K-BAND</td><td style="text-align:left;">18,000 – 27,000 MHz</td></tr>
+                    <tr><td>KA-BAND</td><td style="text-align:left;">&ge; 27,000 MHz</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="glossary-section">
+            <h2>PRI Modulation Patterns</h2>
+            <div class="hint" style="margin-bottom:10px;">The six standard radar PRI modulation types from ESM / PRI-recognition literature — what real PRI-transform deinterleaving techniques (CDIF/SDIF) and PRI modulation recognition research actually discriminate between. Every simulated emitter class is assigned one of these.</div>
+            <div class="glossary-term">Constant</div>
+            <div class="glossary-def">PRI stays fixed at a single value, pulse after pulse — the simplest pattern.</div>
+            <div class="glossary-term">Jittered</div>
+            <div class="glossary-def">PRI varies randomly (small Gaussian noise) around a fixed mean, pulse to pulse — used to resist certain jamming/deception techniques.</div>
+            <div class="glossary-term">Staggered</div>
+            <div class="glossary-def">PRI cycles through a small number of fixed, discrete values in a fixed repeating order (e.g. A-B-C-A-B-C...) — used to resolve range/velocity ambiguities.</div>
+            <div class="glossary-term">Sliding</div>
+            <div class="glossary-def">PRI ramps continuously up and down between a minimum and maximum over time (a triangular sweep), rather than jumping between discrete values.</div>
+            <div class="glossary-term">Wobulated</div>
+            <div class="glossary-def">PRI oscillates smoothly (sinusoidally) between a minimum and maximum — similar intent to sliding, different waveform shape.</div>
+            <div class="glossary-term">Dwell-and-Switch</div>
+            <div class="glossary-def">PRI holds at one fixed value for a long block of pulses, then jumps to a different fixed value for the next block, and so on — distinct from staggered, which switches every pulse rather than dwelling.</div>
+            <div class="glossary-def" style="margin-top:8px;">In the Classification Dataset (independent, non-sequential samples), only the <i>steady-state distribution shape</i> of each pattern can be represented — staggered and dwell-and-switch are statistically indistinguishable without temporal order, so both draw from the same multi-modal distribution there. In the Interleaved Dataset and Live Feed (real pulse trains with genuine time ordering), all six patterns are generated as true temporal sequences and are fully distinguishable — visible directly in the Analytics page's Pulse Train Timeline.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Operating Modes</h2>
+            <div class="glossary-def" style="margin-top:0;">Real multifunction radars don't emit with fixed parameters — they switch between modes that change frequency, pulse width, and PRI <i>together</i>, generally escalating as a target is acquired and tracked (the "war mode" search → lock-on progression), though an emitter can also lose lock and de-escalate.</div>
+            <div class="glossary-term">Search</div>
+            <div class="glossary-def">Wide-area scanning for any target. Longest PRI, widest pulse width, slightly lower frequency, lowest duty cycle — optimized for range/coverage over precision.</div>
+            <div class="glossary-term">Acquisition</div>
+            <div class="glossary-def">A candidate target has been detected; the radar narrows its focus to confirm and localize it. Baseline (1.0×) frequency/PRI/pulse-width multipliers — the reference mode the other three are defined relative to.</div>
+            <div class="glossary-term">Track</div>
+            <div class="glossary-def">Continuously following a confirmed target. Shorter PRI, narrower pulse width, slightly higher frequency, higher duty cycle than acquisition — trades coverage for update-rate precision.</div>
+            <div class="glossary-term">Illumination</div>
+            <div class="glossary-def">Highest-fidelity lock-on, typically immediately preceding weapon guidance or engagement. Shortest PRI, narrowest pulse width, highest frequency and duty cycle of the four modes — the most operationally significant mode to detect promptly.</div>
+            <div class="glossary-term">Mode Diversity vs. Mode Persistence</div>
+            <div class="glossary-def">The Classification Dataset draws each sample's mode independently (population diversity — good for training a classifier to recognize any mode in isolation). The Interleaved Dataset and Live Feed instead give each emitter <i>persistent state</i>: it dwells in one mode for a block of consecutive pulses (15–60 pulses) before a biased random transition (50% escalate, 30% de-escalate, 20% jump) decides the next mode — so the escalation is something you can actually watch unfold over time on the Live Simulation page, not just a diversity statistic.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Dataset Generation Pipelines</h2>
+            <div class="hint" style="margin-bottom:10px;">The Dataset page produces two independent artifacts for two different purposes — never cross-used.</div>
+            <div class="glossary-term">Classification Dataset</div>
+            <div class="glossary-def">Independent, labeled PDW rows (no time-of-arrival ordering) used to train and test the classifier + open-set model. Each row is one emitter's PDW at one random Operating Mode draw. Includes deliberately held-out classes (never trained on, for honest open-set evaluation) and a configurable percentage of unstructured OOD noise (see Noise Percentage below).</div>
+            <div class="glossary-term">Interleaved Dataset</div>
+            <div class="glossary-def">A simulated raw receive stream: multiple emitters' pulse trains mixed together in true time-of-arrival order, each with real per-emitter PRI Modulation Patterns and persistent Operating Mode transitions. Used exclusively for the Deinterleaving demo (Dataset page) and as a Live Simulation replay source — never used to train the classifier, since the point is to test whether pulses can be correctly re-grouped by emitter <i>without</i> knowing the classifier's labels.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Model & Hyperparameters</h2>
+            <div class="glossary-term">Neural Model Backbone</div>
+            <div class="glossary-def">The shared feature extractor before the two output heads. 1D-CNN (1-Dimensional Convolutional Neural Network) focuses on local/spatial pulse patterns; Transformer focuses on sequence relationships; Hybrid combines both.</div>
+            <div class="glossary-term">Distance Metric</div>
+            <div class="glossary-def">How similarity between two embedding vectors is measured in Qdrant: Cosine (angle between vectors, scale-invariant), Euclidean (straight-line distance), or Dot Product (unnormalized similarity).</div>
+            <div class="glossary-term">Inference Engine</div>
+            <div class="glossary-def">PyTorch Native runs the model directly; ONNX (Open Neural Network Exchange) Runtime runs a portable exported version of the same trained weights — both should produce numerically identical outputs. ONNX requires a completed training run to export from.</div>
+            <div class="glossary-term">Learning Rate</div>
+            <div class="glossary-def">Step size for the Adam optimizer during training. Too high can destabilize training; too low makes it slow to converge.</div>
+            <div class="glossary-term">Triplet Margin (α)</div>
+            <div class="glossary-def">Minimum gap the triplet loss enforces between "same-class" and "different-class" embedding distances. Larger margins push classes further apart in embedding space, but can make the loss harder to satisfy.</div>
+            <div class="glossary-term">Min Classifier Confidence</div>
+            <div class="glossary-def">Softmax confidence threshold. Below this, a pulse is treated as low-confidence regardless of the Qdrant distance, and rejected as OOD (Out-of-Distribution) noise.</div>
+            <div class="glossary-term">OOD Distance Threshold</div>
+            <div class="glossary-def">Qdrant distance threshold. Above this, the nearest known prototype is considered too far away to trust — the pulse is flagged as anomalous rather than a confident match.</div>
+            <div class="glossary-term">RPL Loss Weight</div>
+            <div class="glossary-def">How strongly the auxiliary Reciprocal Points Learning (RPL) objective shapes the shared embedding space during training, relative to the primary classifier + triplet losses (default 0.1, deliberately modest so RPL can't destabilize the proven primary training).</div>
+            <div class="glossary-term">Enable Adversarial Training (ARPL)</div>
+            <div class="glossary-def">Upgrades RPL to the full ARPL (Adversarial Reciprocal Points Learning) mechanism: a generator network adversarially synthesizes "confusing" embeddings targeting each known class, and the classifier is trained (in a min-max game) to keep rejecting them as open-space even as the generator tries to make them pass as genuine. Tightens the decision boundary beyond RPL's passive open-space margin loss, at the cost of a less stable, sometimes slower-converging run. Off by default — toggle it and retrain to get a genuine RPL-vs-ARPL comparison across two separate runs (both show up in Run History, each labeled with which mode produced its AUROC number).</div>
+            <div class="glossary-term">Dataset Seed</div>
+            <div class="glossary-def">Controls both which radar-family archetypes (frequency/pulse-width/PRI/RSSI/rise) get generated and which classes are randomly held out — a fresh seed is drawn every training run for genuine diversity. Testing's auto-generate mode reuses the exact seed from your last training run so it evaluates the same population the model was actually trained on, not a different one.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Qdrant Vector DB (Database) Parameters</h2>
+            <div class="glossary-term">HNSW (Hierarchical Navigable Small World) M — connectivity</div>
+            <div class="glossary-def">Number of graph connections per node in the HNSW index. Higher = more accurate search, more memory.</div>
+            <div class="glossary-term">ef_construct</div>
+            <div class="glossary-def">Search breadth used while building the HNSW index. Higher = better-quality index, slower to build.</div>
+            <div class="glossary-term">Quantization Mode</div>
+            <div class="glossary-def">Scalar (SQ8 — 8-bit Scalar Quantization) compresses each vector component to an 8-bit integer; Binary compresses to 1 bit per component. Both trade some precision for memory/speed — intended for edge (low C-SWaP: Cost, Size, Weight, and Power) deployment.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Training & Validation Metrics</h2>
+            <div class="glossary-term">Closed-Set Accuracy</div>
+            <div class="glossary-def">Fraction of pulses from known (trained-on) classes that the classifier head predicted correctly.</div>
+            <div class="glossary-term">Open-Set AUROC (Threshold)</div>
+            <div class="glossary-def">AUROC (Area Under the ROC — Receiver Operating Characteristic — Curve) for using embedding-distance-to-nearest-centroid as an anomaly score, evaluated on classes held entirely out of training. 1.0 = perfect separation of known vs. unknown; 0.5 = no better than random guessing. This is the method the live Fusion Verdict logic actually uses (compared against the OOD Distance Threshold). Each class contributes up to 3 centroids (via K-means clustering over that class's embeddings), not one mean — a class whose true population spans multiple Operating Modes can have sub-clusters far enough apart that a single mean would land in the empty space between them, making genuine same-class samples look falsely anomalous. "Distance to nearest known" now means nearest of all sub-centroids across all classes, not nearest single mean per class.</div>
+            <div class="glossary-term">Open-Set AUROC (Reciprocal Points)</div>
+            <div class="glossary-def">A second, independently-trained open-set method — RPL (Reciprocal Points Learning) — scored the same way (AUROC) on the exact same train/val/holdout split, so the two numbers are directly comparable. Instead of representing each class by what it IS (a centroid), RPL learns a "reciprocal point" per class representing what it ISN'T, plus a learned per-class radius bounding how far a genuine sample of that class may drift from its own reciprocal point. Farther-than-radius = flagged unknown. This gives each class a finite, bounded acceptance region instead of softmax's open-ended one — the mechanism behind the ARPL (Adversarial Reciprocal Points Learning) line of current open-set radar literature. Trained jointly with the main model as an auxiliary objective (a small fixed loss weight, so it doesn't destabilize the primary training) — it does not replace the threshold method, both are reported from the same run.</div>
+            <div class="glossary-term">Holdout Classes</div>
+            <div class="glossary-def">Radar classes deliberately excluded from training so open-set detection can be measured honestly — the model has genuinely never seen them, unlike ordinary noise.</div>
+            <div class="glossary-term">Noise Percentage (Unstructured OOD)</div>
+            <div class="glossary-def">Fraction of unstructured, agile OOD (Out-of-Distribution) pulses (no coherent class structure at all — not just "a radar type we didn't train on") mixed into the open-set evaluation pool alongside the holdout classes. Real intercepted environments contain both novel-but-structured emitter types and outright junk/noise signals, so a thorough open-set evaluation should include both. Set on the Dataset page when generating the classification dataset; Testing's auto-generate mode reuses the exact percentage the current model was trained against, same as it reuses the dataset seed and ranges.</div>
+            <div class="glossary-term">Training Loss</div>
+            <div class="glossary-def">Sum of cross-entropy (classifier head) and triplet loss (metric head) on each training batch, averaged per epoch. Trending down means the model is fitting the training data; a plateau means further epochs are giving diminishing returns.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Deinterleaving Metrics</h2>
+            <div class="glossary-term">Classical Method</div>
+            <div class="glossary-def">DBSCAN (Density-Based Spatial Clustering of Applications with Noise) clustering directly on standardized frequency/pulse-width/AOA (Angle of Arrival) — a feature-space clustering baseline, not a full PRI-transform (CDIF/SDIF: Cumulative/Sequential Difference Histogram) deinterleaver. Requires no training and no ground truth — works on any uploaded data, real or synthetic.</div>
+            <div class="glossary-term">Deep Metric Learning Method</div>
+            <div class="glossary-def">Trains a small embedding network (triplet loss — same idea as the classifier's metric head, applied per-pulse instead of per-class) using an MLP (Multi-Layer Perceptron) on this dataset's own ground-truth emitter identities, then runs the same DBSCAN clustering in that learned embedding space instead of raw standardized features. Mirrors the transformer-based deep metric learning approach in current radar pulse deinterleaving research, using a lightweight MLP instead of a full transformer to stay CPU-fast. Ground truth trains the embedding only — the clustering step is exactly as unsupervised as the classical method, and only synthetic data (with known emitter_instance_id) can train it; uploaded real captures with no ground truth can only use the classical method.</div>
+            <div class="glossary-term">Predicted Tracks</div>
+            <div class="glossary-def">Number of distinct emitter clusters the clustering algorithm found in the interleaved pulse stream — no ground truth used at this step, regardless of method.</div>
+            <div class="glossary-term">Adjusted Rand Index (ARI)</div>
+            <div class="glossary-def">Standard clustering-agreement score comparing predicted clusters to the true emitter-instance labels. 1.0 = perfect agreement, 0.0 = no better than random clustering. Computed identically for both methods, so it's a fair head-to-head comparison.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Analytics Page Metrics</h2>
+            <div class="glossary-term">Summary Statistics</div>
+            <div class="glossary-def">Standard descriptive statistics (count, mean, standard deviation, min, quartiles, max) per numeric column — the pandas <code>describe()</code> view.</div>
+            <div class="glossary-term">Correlation Heatmap</div>
+            <div class="glossary-def">Pairwise Pearson correlation between numeric PDW features, colored by strength/direction — reveals redundant or coupled features (e.g. pulse width and duty cycle).</div>
+            <div class="glossary-term">Class Balance / Class Diversity</div>
+            <div class="glossary-def">Row count per class label, plus three population-health stats: <b>Classes</b> (distinct label count), <b>Normalized Shannon Entropy</b> (0–1; 1.0 = perfectly even class distribution, lower = imbalanced), and <b>Max/Min Class Ratio</b> (imbalance ratio — how many times larger the biggest class is than the smallest).</div>
+            <div class="glossary-term">Frequency Band Breakdown</div>
+            <div class="glossary-def">Row count per standard radar frequency band (L/S/C/X/Ku/K/Ka — see Radar Frequency Bands above) — the classic first-pass ESM spectrum occupancy view.</div>
+            <div class="glossary-term">PRI Pattern Distribution</div>
+            <div class="glossary-def">Row count per PRI Modulation Pattern type (see above) present in the loaded dataset.</div>
+            <div class="glossary-term">Pulse Train Timeline</div>
+            <div class="glossary-def">Scatter plot of Time of Arrival vs. Carrier Frequency, colored by emitter/class — the classic real-time ESM console view. Overlapping pulse trains from different emitters are exactly what makes deinterleaving hard; PRI Modulation Patterns (staggered, sliding, etc.) become visible as literal geometric shapes along the time axis.</div>
+            <div class="glossary-term">PCA (Principal Component Analysis) — Raw Features</div>
+            <div class="glossary-def">2D projection of the raw physical PDW features, before any model is involved — the baseline separability question every classification task starts with. "Explained variance" states how much of the original feature-space spread the 2 plotted axes actually capture.</div>
+            <div class="glossary-term">PCA — Learned Embedding</div>
+            <div class="glossary-def">2D projection of the model's actual learned embeddings for this data — the real answer to "did training separate these classes?", not just an accuracy number. Only available after a model has been trained.</div>
+            <div class="glossary-term">Silhouette Score</div>
+            <div class="glossary-def">Cluster-separation quality score, computed per class label in either the raw feature space or the learned embedding space. Ranges roughly -1 to +1: near +1 means each class is tight and well-separated from the others, 0 means classes overlap, negative means points are on average closer to a different class than their own. Comparing the raw-feature score to the embedding-space score is a direct, quantitative measure of how much the trained model actually improved class separability.</div>
+            <div class="glossary-term">Duty Cycle (%) / PRF (Hz)</div>
+            <div class="glossary-def">See PDW Fields above — both are alternative views of the same pulse-timing information already carried by Pulse Width and PRI.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Fusion Verdicts &amp; ECM (Electronic Countermeasures) Actions</h2>
+            <div class="glossary-def" style="margin-top:0;">Every pulse gets one verdict, produced by combining the classifier head's confidence with the Qdrant embedding-distance check — neither signal is trusted alone.</div>
+            <div class="glossary-term">VERIFIED_KNOWN_TARGET</div>
+            <div class="glossary-def">High classifier confidence AND small Qdrant distance — the model is confident and the embedding genuinely resembles a known prototype. ECM action: <b>MONITOR_ONLY</b> (no active response needed for a verified, already-known emitter).</div>
+            <div class="glossary-term">UNKNOWN_THREAT_ANOMALY</div>
+            <div class="glossary-def">High classifier confidence BUT large Qdrant distance — the classifier is (over-)confident, yet the embedding doesn't actually sit near any known prototype. Treated as a possible novel/spoofed emitter. ECM action: <b>AUTOMATED_JAMMER_ENGAGED</b> (treat as a live threat pending human confirmation).</div>
+            <div class="glossary-term">OOD_NOISE_REJECTED</div>
+            <div class="glossary-def">Low classifier confidence — the model itself isn't sure, regardless of distance. ECM action: <b>ELINT_LOGGING</b> (logged for later Electronic Intelligence analysis rather than acted on immediately).</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Live Simulation</h2>
+            <div class="glossary-term">Replay Source</div>
+            <div class="glossary-def"><b>Interleaved Dataset</b> replays the Dataset page's deinterleaving demo file in real time-of-arrival order — its emitter_class labels live in a different, unrelated label space from the classifier's actual trained classes, so predictions can't be checked against ground truth (visualization/demo value only). <b>Classification Dataset</b> instead replays the exact schema and label space the model was trained on, shuffled into a live-feeling order — every prediction gets a real, verifiable Correct/Incorrect flag: for known rows, whether the predicted class matches the true label; for held-out/noise rows, whether the fusion verdict correctly avoided confirming them as a known target. <b>Live Feed</b> generates genuinely continuous, unlabeled pulses on the fly (nothing read from or written to disk), for up to 15 minutes — a small set of simulated emitters carry persistent state across the session, each dwelling in one Operating Mode before transitioning (generally escalating, occasionally losing lock and de-escalating), so a real search → track → lock-on progression is something you can actually watch unfold — but nothing about which emitter, class, or mode is ever sent to the client or scored, matching genuine real-time operation where no ground truth exists at all. Configure its population via the Advanced: Population Ranges button (shown only for this mode).</div>
+            <div class="glossary-term">Live Threat Log</div>
+            <div class="glossary-def">The primary operator-facing view — the last 30 detections, newest first, colored by verdict. Modeled on real EW console research (e.g. AN/SLQ-32 human-factors studies): operators need to track multiple concurrent detections at a glance, not just the single latest reading.</div>
+            <div class="glossary-term">Situational Awareness Tiles</div>
+            <div class="glossary-def">Running session totals — Pulses Processed, Verified Known, Unknown Threats, Rejected/Noise, and (Classification Dataset replay only) Live Accuracy against ground truth. Gives an at-a-glance summary without having to mentally tally the scrolling log yourself. <b>Double-click any tile</b> to open a detail table of every underlying pulse in that category (predicted class, confidence, verdict, ECM action, and all PDW input features) — useful for inspecting exactly what drove the aggregate count.</div>
+            <div class="glossary-term">Session Persistence</div>
+            <div class="glossary-def">Live Simulation data (stats, threat log, charts, and the tile detail tables) is kept in the browser's session storage and automatically restored if you navigate to another page and back, so switching tabs to check Analytics or Help doesn't lose your run. This is per-browser-tab only — it clears when the tab is closed, and does not survive a full server restart. Starting a new simulation always clears it for a clean run.</div>
+        </div>
+
+        <div class="glossary-section">
+            <h2>Status Badges</h2>
+            <div class="glossary-term">PROTOTYPES: RANDOM (UNTRAINED)</div>
+            <div class="glossary-def">The Qdrant collection holds random placeholder vectors, not learned class centroids. Every distance/verdict computed against them is essentially noise. Train a model to replace them with real centroids.</div>
+            <div class="glossary-term">PROTOTYPES: TRAINED</div>
+            <div class="glossary-def">The Qdrant collection holds real class centroids computed from a completed training run's validation embeddings.</div>
+            <div class="glossary-term">ENGINE: PYTORCH / ENGINE: ONNX</div>
+            <div class="glossary-def">Which inference engine produced the currently displayed result — see Inference Engine above.</div>
+        </div>
+
+    </div>
+</body>
+</html>

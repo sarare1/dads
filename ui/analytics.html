@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SOSA EW Platform — Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/shared.css">
+    <style>
+        .plot-btn {
+            display: block; width: 100%; text-align: left; background: #1f2937; color: var(--text-main);
+            font-weight: normal; font-size: 8.8pt; padding: 7px 10px; margin-top: 4px; border-radius: 4px;
+            border: 1px solid transparent; cursor: pointer;
+        }
+        .plot-btn:hover { background: #263244; }
+        .plot-btn.active { background: #0c3550; border-color: var(--accent-blue); color: var(--accent-blue); font-weight: bold; }
+        .plot-group-label {
+            font-size: 8pt; color: #6b7280; text-transform: uppercase; font-weight: bold;
+            margin-top: 16px; margin-bottom: 4px; letter-spacing: 0.5px;
+        }
+        #plot-area { min-height: 480px; }
+        .plot-canvas-wrap { height: 460px; }
+        .scatter-controls { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+        .scatter-controls > div { flex: 1; }
+        .scatter-controls button { margin-top: 4px; }
+        .empty-state { color: #6b7280; font-size: 9.5pt; padding: 40px 0; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>SOSA EW Open-Set Recognition Platform</h1>
+        <span class="status-tag">ANALYTICS</span>
+    </header>
+    <nav class="top-nav">
+        <a href="/">Training</a>
+        <a href="/validation">Testing</a>
+        <a href="/inference">Inference</a>
+        <a href="/dataset">Dataset</a>
+        <a href="/analytics" class="active">Analytics</a>
+        <a href="/live">Live Simulation</a>
+        <a href="/help">Help</a>
+    </nav>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="card-title">Dataset Source</div>
+            <label>Source</label>
+            <select id="source-select">
+                <option value="classification">Classification Dataset</option>
+                <option value="generated">Interleaved Dataset</option>
+                <option value="uploaded">Last Uploaded File</option>
+            </select>
+            <button onclick="loadDataset()">Load Dataset</button>
+            <div id="load-status" class="hint"></div>
+
+            <div id="plot-buttons"></div>
+        </div>
+
+        <div class="page-content">
+            <div id="analytics-summary" class="status-line" style="margin-bottom: 12px;">No dataset loaded yet — pick a source and click Load Dataset.</div>
+            <div class="card" id="plot-area">
+                <div class="empty-state">Select a plot from the left once a dataset is loaded.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let analyticsData = null;
+        let currentChart = null;
+        let activeView = null;
+
+        const FEATURE_LABELS = {
+            frequency_mhz: "Carrier Frequency (MHz)",
+            pulse_width: "Pulse Width",
+            pri_us: "PRI (µs)",
+            amplitude_dbm: "Amplitude / RSSI (dBm)",
+            rise_time_ns: "Rise Time (ns)",
+            aoa_deg: "Angle of Arrival (deg)",
+            inter_pulse_interval_ns: "Inter-Pulse Interval — raw stream (ns)",
+            duty_cycle_pct: "Duty Cycle (%)",
+            prf_hz: "Pulse Repetition Frequency (Hz)",
+        };
+        const PALETTE = ["#00d2ff", "#f59e0b", "#10b981", "#ef4444", "#7c3aed", "#ec4899", "#84cc16", "#38bdf8", "#fb923c", "#a78bfa"];
+        const featureLabel = (k) => FEATURE_LABELS[k] || k;
+
+        async function loadDataset() {
+            const source = document.getElementById('source-select').value;
+            const statusEl = document.getElementById('load-status');
+            statusEl.innerText = 'Loading...';
+            try {
+                const resp = await fetch(`/api/analytics?source=${encodeURIComponent(source)}`);
+                const data = await resp.json();
+                if (data.status !== 'success') {
+                    statusEl.innerText = data.message || 'Failed to load dataset.';
+                    document.getElementById('analytics-summary').innerText = data.message || 'No dataset found for this source.';
+                    document.getElementById('plot-buttons').innerHTML = '';
+                    return;
+                }
+                analyticsData = data;
+                statusEl.innerText = `Loaded ${data.filename}`;
+                document.getElementById('analytics-summary').innerText =
+                    `${data.filename}: ${data.total_rows} rows, ${data.features.length} numeric features` +
+                    (data.label_column ? `, grouped by ${data.label_column} (${Object.keys(data.class_counts).length} classes)` : '');
+                buildPlotButtons();
+                showSummary();
+            } catch (e) {
+                statusEl.innerText = 'Load failed — is the server running?';
+            }
+        }
+
+        function buildPlotButtons() {
+            const container = document.getElementById('plot-buttons');
+            container.innerHTML = '';
+
+            const addGroup = (label) => {
+                const div = document.createElement('div');
+                div.className = 'plot-group-label';
+                div.innerText = label;
+                container.appendChild(div);
+            };
+            const addButton = (id, label, onClick) => {
+                const btn = document.createElement('button');
+                btn.className = 'plot-btn';
+                btn.dataset.viewId = id;
+                btn.innerText = label;
+                btn.onclick = () => { onClick(); setActiveButton(id); };
+                container.appendChild(btn);
+                return btn;
+            };
+
+            addGroup('Overview');
+            addButton('summary', 'Summary Statistics', showSummary);
+            addButton('correlation', 'Correlation Heatmap', showCorrelation);
+            if (analyticsData.label_column) addButton('classbalance', 'Class Balance', showClassBalance);
+
+            if (analyticsData.band_distribution || analyticsData.pri_pattern_distribution) {
+                addGroup('Radar / ESM Analysis');
+                if (analyticsData.band_distribution) addButton('bands', 'Frequency Band Breakdown', showBandDistribution);
+                if (analyticsData.pri_pattern_distribution) addButton('pripattern', 'PRI Pattern Distribution', showPriPatternDistribution);
+                if (analyticsData.pulse_train_timeline) addButton('timeline', 'Pulse Train Timeline (ESM Console)', showPulseTrainTimeline);
+            }
+
+            if (analyticsData.pca_raw || analyticsData.pca_embedding) {
+                addGroup('Class Separability');
+                if (analyticsData.pca_raw) addButton('pca-raw', 'PCA — Raw Features', () => showPCA('raw'));
+                if (analyticsData.pca_embedding) addButton('pca-embedding', 'PCA — Learned Embedding', () => showPCA('embedding'));
+            }
+
+            addGroup('Distributions (Histogram)');
+            analyticsData.features.forEach(f => addButton(`hist-${f}`, featureLabel(f), () => showHistogram(f)));
+            if (analyticsData.histograms.inter_pulse_interval_ns) {
+                addButton('hist-inter_pulse_interval_ns', featureLabel('inter_pulse_interval_ns'), () => showHistogram('inter_pulse_interval_ns'));
+            }
+
+            if (analyticsData.label_column && Object.keys(analyticsData.boxplot).length) {
+                addGroup('Box Plot by Class');
+                analyticsData.features.forEach(f => {
+                    if (analyticsData.boxplot[f]) addButton(`box-${f}`, featureLabel(f), () => showBoxplot(f));
+                });
+            }
+
+            addGroup('Relationships');
+            addButton('scatter', 'Scatter Explorer', showScatterExplorer);
+
+            setActiveButton('summary');
+        }
+
+        function setActiveButton(id) {
+            activeView = id;
+            document.querySelectorAll('.plot-btn').forEach(b => b.classList.toggle('active', b.dataset.viewId === id));
+        }
+
+        function destroyChart() {
+            if (currentChart) { currentChart.destroy(); currentChart = null; }
+        }
+
+        function freshCanvas() {
+            const area = document.getElementById('plot-area');
+            area.innerHTML = '<div class="plot-canvas-wrap"><canvas id="plot-canvas"></canvas></div>';
+            return document.getElementById('plot-canvas').getContext('2d');
+        }
+
+        function showSummary() {
+            if (!analyticsData) return;
+            destroyChart();
+            const d = analyticsData.describe;
+            const cols = ["count", "mean", "std", "min", "p25", "median", "p75", "max", "missing"];
+            const fmt = (v) => v === undefined ? '—' : (Number.isInteger(v) ? v : v.toFixed(3));
+            let html = `<div class="card-title">Summary Statistics</div>
+                <div class="hint" style="margin-bottom:10px;">Standard pandas-style describe() per numeric PDW feature — count, central tendency, spread, quartiles, and missing values.</div>
+                <div style="overflow-x:auto;"><table class="eda-table"><thead><tr><th>Feature</th>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+            Object.keys(d).forEach(f => {
+                html += `<tr><td>${featureLabel(f)}</td>${cols.map(c => `<td>${fmt(d[f][c])}</td>`).join('')}</tr>`;
+            });
+            html += '</tbody></table></div>';
+            document.getElementById('plot-area').innerHTML = html;
+        }
+
+        function showCorrelation() {
+            if (!analyticsData) return;
+            destroyChart();
+            const { columns, matrix } = analyticsData.correlation;
+            const corrColor = (v) => {
+                if (v === null || v === undefined) return '#1f2937';
+                const t = Math.max(-1, Math.min(1, v));
+                if (t >= 0) { const c = Math.round(255 * (1 - t)); return `rgb(255,${c},${c})`; }
+                const c = Math.round(255 * (1 + t)); return `rgb(${c},${c},255)`;
+            };
+            let html = `<div class="card-title">Correlation Heatmap</div>
+                <div class="hint" style="margin-bottom:10px;">Pearson correlation between numeric PDW features (-1 to +1). Strong red/blue cells indicate features that move together — useful for spotting redundant or highly discriminative feature pairs.</div>
+                <div style="overflow-x:auto;"><table class="eda-table"><thead><tr><th></th>${columns.map(c => `<th>${featureLabel(c)}</th>`).join('')}</tr></thead><tbody>`;
+            columns.forEach((rowName, i) => {
+                html += `<tr><td>${featureLabel(rowName)}</td>`;
+                matrix[i].forEach(v => {
+                    html += `<td style="background:${corrColor(v)};color:#111;font-weight:bold;text-align:center;">${v === null ? '—' : v.toFixed(2)}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            document.getElementById('plot-area').innerHTML = html;
+        }
+
+        function showClassBalance() {
+            if (!analyticsData) return;
+            const d = analyticsData.class_diversity;
+            const diversityHtml = d ? `
+                <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); padding: 0; gap: 12px; margin-bottom: 14px;">
+                    <div class="metric-block"><div class="metric-value">${d.num_classes}</div><div class="metric-label">Classes</div></div>
+                    <div class="metric-block"><div class="metric-value">${d.shannon_entropy_normalized ?? '—'}</div><div class="metric-label">Normalized Entropy (1.0 = perfectly even)</div></div>
+                    <div class="metric-block"><div class="metric-value">${d.imbalance_ratio}×</div><div class="metric-label">Max/Min Class Ratio</div></div>
+                </div>` : '';
+            document.getElementById('plot-area').innerHTML = `<div class="card-title">Class Balance</div>
+                <div class="hint" style="margin-bottom:10px;">Row count per class label in the loaded dataset.</div>
+                ${diversityHtml}
+                <div class="plot-canvas-wrap"><canvas id="plot-canvas"></canvas></div>`;
+            const ctx = document.getElementById('plot-canvas').getContext('2d');
+            destroyChart();
+            const labels = Object.keys(analyticsData.class_counts);
+            const values = Object.values(analyticsData.class_counts);
+            currentChart = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Rows', data: values, backgroundColor: '#10b981' }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function showBandDistribution() {
+            if (!analyticsData) return;
+            document.getElementById('plot-area').innerHTML = `<div class="card-title">Frequency Band Breakdown</div>
+                <div class="hint" style="margin-bottom:10px;">Standard radar band designations (L/S/C/X/Ku/K/Ka) — the classic first-pass ESM spectrum occupancy view.</div>
+                <div class="plot-canvas-wrap"><canvas id="plot-canvas"></canvas></div>`;
+            const ctx = document.getElementById('plot-canvas').getContext('2d');
+            destroyChart();
+            const bandOrder = ["L-BAND", "S-BAND", "C-BAND", "X-BAND", "KU-BAND", "K-BAND", "KA-BAND"];
+            const dist = analyticsData.band_distribution;
+            const labels = bandOrder.filter(b => dist[b] !== undefined);
+            currentChart = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Pulses', data: labels.map(b => dist[b]), backgroundColor: '#38bdf8' }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function showPriPatternDistribution() {
+            if (!analyticsData) return;
+            document.getElementById('plot-area').innerHTML = `<div class="card-title">PRI Modulation Pattern Distribution</div>
+                <div class="hint" style="margin-bottom:10px;">Which of the six standard radar PRI modulation types (constant, jittered, staggered, sliding, wobulated, dwell-and-switch) this dataset's families/emitters use — the primary classical ESM discriminant PRI-transform deinterleaving techniques are built around.</div>
+                <div class="plot-canvas-wrap"><canvas id="plot-canvas"></canvas></div>`;
+            const ctx = document.getElementById('plot-canvas').getContext('2d');
+            destroyChart();
+            const dist = analyticsData.pri_pattern_distribution;
+            const labels = Object.keys(dist);
+            currentChart = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Rows', data: labels.map(k => dist[k]), backgroundColor: PALETTE.slice(0, labels.length) }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function showPulseTrainTimeline() {
+            if (!analyticsData) return;
+            destroyChart();
+            const ctx = freshCanvas();
+            document.getElementById('plot-area').insertAdjacentHTML('afterbegin',
+                `<div class="card-title">Pulse Train Timeline</div>
+                 <div class="hint" style="margin-bottom:10px;">Time-of-arrival vs. carrier frequency — the classic real-time ESM console view. Overlapping pulse trains from different emitters are exactly what makes deinterleaving hard; PRI modulation patterns (staggered, sliding, etc.) become visible as literal geometric shapes along the time axis.</div>`);
+            const points = analyticsData.pulse_train_timeline;
+            const byLabel = {};
+            points.forEach(p => { (byLabel[p.label ?? 'unlabeled'] = byLabel[p.label ?? 'unlabeled'] || []).push({ x: p.toa_ns, y: p.frequency_mhz }); });
+            const datasets = Object.keys(byLabel).sort().map((lbl, i) => ({
+                label: lbl, data: byLabel[lbl], backgroundColor: PALETTE[i % PALETTE.length], pointRadius: 2.5,
+            }));
+            currentChart = new Chart(ctx, {
+                type: 'scatter',
+                data: { datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 9 } } } },
+                    scales: {
+                        x: { title: { display: true, text: 'Time of Arrival (ns)' } },
+                        y: { title: { display: true, text: 'Carrier Frequency (MHz)' } },
+                    }
+                }
+            });
+        }
+
+        function showPCA(kind) {
+            if (!analyticsData) return;
+            const pca = kind === 'embedding' ? analyticsData.pca_embedding : analyticsData.pca_raw;
+            const silhouette = kind === 'embedding' ? analyticsData.silhouette_embedding : analyticsData.silhouette_raw;
+            const title = kind === 'embedding' ? 'PCA — Learned Embedding Space' : 'PCA — Raw Feature Space';
+            const explainer = kind === 'embedding'
+                ? "2D projection of the model's actual learned embeddings for this data — the real answer to \"did training separate these classes?\", not just an accuracy number."
+                : "2D projection of the raw physical PDW features, before any model is involved — the baseline separability question every classification task starts with.";
+            destroyChart();
+            if (!pca) {
+                document.getElementById('plot-area').innerHTML = `<div class="card-title">${title}</div><div class="empty-state">Not available — train a model first for the embedding-space view.</div>`;
+                return;
+            }
+            const ctx = freshCanvas();
+            const silhouetteHtml = silhouette !== null && silhouette !== undefined
+                ? `<div class="metric-block" style="margin-bottom:10px;"><div class="metric-value">${silhouette.toFixed(3)}</div><div class="metric-label">Silhouette Score (+1 tight/separated, 0 overlapping, negative worse-than-random)</div></div>` : '';
+            document.getElementById('plot-area').insertAdjacentHTML('afterbegin',
+                `<div class="card-title">${title}</div>
+                 <div class="hint" style="margin-bottom:10px;">${explainer} Explained variance: PC1 ${(pca.explained_variance_ratio[0] * 100).toFixed(1)}%, PC2 ${((pca.explained_variance_ratio[1] || 0) * 100).toFixed(1)}%.</div>
+                 ${silhouetteHtml}`);
+            const byLabel = {};
+            pca.points.forEach(p => { (byLabel[p.label ?? 'unlabeled'] = byLabel[p.label ?? 'unlabeled'] || []).push({ x: p.x, y: p.y }); });
+            const datasets = Object.keys(byLabel).sort().map((lbl, i) => ({
+                label: lbl, data: byLabel[lbl], backgroundColor: PALETTE[i % PALETTE.length], pointRadius: 3,
+            }));
+            currentChart = new Chart(ctx, {
+                type: 'scatter',
+                data: { datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: Object.keys(byLabel).length <= 25, labels: { boxWidth: 10, font: { size: 9 } } } },
+                    scales: {
+                        x: { title: { display: true, text: 'PC1' } },
+                        y: { title: { display: true, text: 'PC2' } },
+                    }
+                }
+            });
+        }
+
+        function showHistogram(feature) {
+            if (!analyticsData) return;
+            const h = analyticsData.histograms[feature];
+            document.getElementById('plot-area').innerHTML = `<div class="card-title">${featureLabel(feature)} — Histogram</div>
+                <div class="hint" style="margin-bottom:10px;">Distribution of ${featureLabel(feature).toLowerCase()} across all rows in the loaded dataset.</div>
+                <div class="plot-canvas-wrap"><canvas id="plot-canvas"></canvas></div>`;
+            destroyChart();
+            if (!h) { document.getElementById('plot-area').insertAdjacentHTML('beforeend', '<div class="empty-state">No data for this feature.</div>'); return; }
+            const ctx = document.getElementById('plot-canvas').getContext('2d');
+            currentChart = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: h.labels, datasets: [{ label: 'Count', data: h.counts, backgroundColor: '#00d2ff' }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { ticks: { maxRotation: 60, minRotation: 45 } } }
+                }
+            });
+        }
+
+        function showBoxplot(feature) {
+            if (!analyticsData) return;
+            destroyChart();
+            const bp = analyticsData.boxplot[feature];
+            const area = document.getElementById('plot-area');
+            if (!bp) { area.innerHTML = `<div class="card-title">${featureLabel(feature)} — Box Plot by Class</div><div class="empty-state">No data.</div>`; return; }
+
+            let allVals = [];
+            bp.stats.forEach(s => { allVals.push(s.min, s.max, ...s.outliers); });
+            const yMin = Math.min(...allVals), yMax = Math.max(...allVals);
+            const pad = (yMax - yMin) * 0.08 || 1;
+            const domainMin = yMin - pad, domainMax = yMax + pad;
+
+            const n = bp.classes.length;
+            const slot = 70, margin = { left: 70, right: 20, top: 20, bottom: 90 };
+            const plotW = n * slot, plotH = 340;
+            const svgW = plotW + margin.left + margin.right, svgH = plotH + margin.top + margin.bottom;
+            const y = (v) => margin.top + plotH - ((v - domainMin) / (domainMax - domainMin)) * plotH;
+
+            let gridlines = '';
+            for (let i = 0; i <= 5; i++) {
+                const v = domainMin + (i / 5) * (domainMax - domainMin);
+                const yy = y(v);
+                gridlines += `<line x1="${margin.left}" y1="${yy}" x2="${margin.left + plotW}" y2="${yy}" stroke="#1f2937" stroke-width="1"/>
+                    <text x="${margin.left - 8}" y="${yy + 3}" fill="#6b7280" font-size="9" text-anchor="end">${v.toFixed(1)}</text>`;
+            }
+
+            let boxes = '';
+            bp.classes.forEach((cls, i) => {
+                const s = bp.stats[i];
+                const cx = margin.left + i * slot + slot / 2;
+                const boxW = 34;
+                const color = PALETTE[i % PALETTE.length];
+                boxes += `<line x1="${cx}" y1="${y(s.max)}" x2="${cx}" y2="${y(s.q3)}" stroke="${color}" stroke-width="1.5"/>
+                    <line x1="${cx}" y1="${y(s.min)}" x2="${cx}" y2="${y(s.q1)}" stroke="${color}" stroke-width="1.5"/>
+                    <line x1="${cx - 12}" y1="${y(s.max)}" x2="${cx + 12}" y2="${y(s.max)}" stroke="${color}" stroke-width="1.5"/>
+                    <line x1="${cx - 12}" y1="${y(s.min)}" x2="${cx + 12}" y2="${y(s.min)}" stroke="${color}" stroke-width="1.5"/>
+                    <rect x="${cx - boxW / 2}" y="${y(s.q3)}" width="${boxW}" height="${Math.max(1, y(s.q1) - y(s.q3))}" fill="${color}" fill-opacity="0.25" stroke="${color}" stroke-width="1.5"/>
+                    <line x1="${cx - boxW / 2}" y1="${y(s.median)}" x2="${cx + boxW / 2}" y2="${y(s.median)}" stroke="${color}" stroke-width="2.5"/>
+                    ${s.outliers.map(o => `<circle cx="${cx}" cy="${y(o)}" r="2.5" fill="${color}" fill-opacity="0.7"/>`).join('')}
+                    <text x="${cx}" y="${margin.top + plotH + 16}" fill="#9ca3af" font-size="9" text-anchor="end" transform="rotate(-40 ${cx} ${margin.top + plotH + 16})">${cls}</text>`;
+            });
+
+            area.innerHTML = `<div class="card-title">${featureLabel(feature)} — Box Plot by Class</div>
+                <div class="hint" style="margin-bottom:10px;">Median, interquartile range, and whiskers (1.5×IQR) per class${bp.classes.length < Object.keys(analyticsData.class_counts).length ? ` — showing the ${bp.classes.length} most populous classes` : ''}. Dots are statistical outliers beyond the whiskers.</div>
+                <div style="overflow-x:auto;"><svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${gridlines}${boxes}</svg></div>`;
+        }
+
+        function showScatterExplorer() {
+            if (!analyticsData) return;
+            destroyChart();
+            const feats = analyticsData.features;
+            const opts = feats.map(f => `<option value="${f}">${featureLabel(f)}</option>`).join('');
+            document.getElementById('plot-area').innerHTML = `<div class="card-title">Scatter Explorer</div>
+                <div class="hint" style="margin-bottom:10px;">Pairwise relationship between any two numeric features, colored by class — the classic first look for whether two features separate classes well together.</div>
+                <div class="scatter-controls">
+                    <div><label>X Axis</label><select id="scatter-x">${opts}</select></div>
+                    <div><label>Y Axis</label><select id="scatter-y">${opts}</select></div>
+                    <div style="flex:0 0 120px;"><button onclick="renderScatter()">Plot</button></div>
+                </div>
+                <div class="plot-canvas-wrap"><canvas id="plot-canvas"></canvas></div>`;
+            if (feats.length > 1) document.getElementById('scatter-y').value = feats[1];
+            renderScatter();
+        }
+
+        function renderScatter() {
+            if (!analyticsData) return;
+            const xKey = document.getElementById('scatter-x').value;
+            const yKey = document.getElementById('scatter-y').value;
+            destroyChart();
+            const ctx = document.getElementById('plot-canvas').getContext('2d');
+            const rows = analyticsData.scatter_sample;
+
+            let datasets;
+            if (analyticsData.label_column) {
+                const byLabel = {};
+                rows.forEach(r => {
+                    const lbl = r._label ?? 'unknown';
+                    if (r[xKey] === null || r[yKey] === null || r[xKey] === undefined || r[yKey] === undefined) return;
+                    (byLabel[lbl] = byLabel[lbl] || []).push({ x: r[xKey], y: r[yKey] });
+                });
+                datasets = Object.keys(byLabel).sort().map((lbl, i) => ({
+                    label: lbl, data: byLabel[lbl], backgroundColor: PALETTE[i % PALETTE.length], pointRadius: 3,
+                }));
+            } else {
+                const pts = rows.filter(r => r[xKey] !== null && r[yKey] !== null).map(r => ({ x: r[xKey], y: r[yKey] }));
+                datasets = [{ label: 'Rows', data: pts, backgroundColor: '#00d2ff', pointRadius: 3 }];
+            }
+
+            currentChart = new Chart(ctx, {
+                type: 'scatter',
+                data: { datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: !!analyticsData.label_column, labels: { boxWidth: 10, font: { size: 9 } } } },
+                    scales: {
+                        x: { title: { display: true, text: featureLabel(xKey) } },
+                        y: { title: { display: true, text: featureLabel(yKey) } },
+                    }
+                }
+            });
+        }
+
+        loadDataset();
+    </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+system:
+  sample_rate_hz: 1000000000
+  sosa_compliance: true
+
+model:
+  backbone_type: "hybrid"  # Options: cnn1d, transformer, hybrid
+  input_dim: 6            # PDW Features: fc, PW, PRI, RSSI, ToA, rise_time
+  embedding_dim: 128
+  num_classes: 20
+  dropout: 0.15
+  inference_engine: "pytorch"  # Options: pytorch, onnx
+
+hyperparameters:
+  learning_rate: 0.001
+  triplet_margin: 0.5
+  classifier_confidence_threshold: 0.88
+  ood_distance_threshold: 0.42
+  distance_metric: "cosine"  # Options: cosine, euclidean, dot
+
+vector_db:
+  collection_name: "radar_prototypes"
+  quantization: "scalar"  # Options: scalar, binary
+  hnsw_m: 16
+  hnsw_ef_construct: 100
