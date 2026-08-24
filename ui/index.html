@@ -128,7 +128,34 @@
         document.getElementById('cfg-ood-thresh').oninput = (e) => document.getElementById('val-ood-thresh').innerText = e.target.value;
         document.getElementById('cfg-rpl-weight').oninput = (e) => document.getElementById('val-rpl-weight').innerText = e.target.value;
 
-        async function applyConfiguration() {
+        async function loadConfigIntoForm() {
+            // The config form is static HTML with hardcoded default values — without this,
+            // it always shows those defaults regardless of the server's real current config
+            // (e.g. after a restart, or a change made from another tab/session), so what you
+            // see selected here could silently disagree with what Train Model actually uses.
+            const cfg = await (await fetch('/api/config')).json();
+            document.getElementById('cfg-backbone').value = cfg.model.backbone_type;
+            document.getElementById('cfg-metric').value = cfg.hyperparameters.distance_metric;
+            document.getElementById('cfg-engine').value = cfg.model.inference_engine;
+
+            document.getElementById('cfg-lr').value = cfg.hyperparameters.learning_rate;
+            document.getElementById('val-lr').innerText = cfg.hyperparameters.learning_rate;
+            document.getElementById('cfg-margin').value = cfg.hyperparameters.triplet_margin;
+            document.getElementById('val-margin').innerText = cfg.hyperparameters.triplet_margin;
+            document.getElementById('cfg-cls-thresh').value = cfg.hyperparameters.classifier_confidence_threshold;
+            document.getElementById('val-cls-thresh').innerText = cfg.hyperparameters.classifier_confidence_threshold;
+            document.getElementById('cfg-ood-thresh').value = cfg.hyperparameters.ood_distance_threshold;
+            document.getElementById('val-ood-thresh').innerText = cfg.hyperparameters.ood_distance_threshold;
+            document.getElementById('cfg-rpl-weight').value = cfg.hyperparameters.rpl_loss_weight;
+            document.getElementById('val-rpl-weight').innerText = cfg.hyperparameters.rpl_loss_weight;
+            document.getElementById('cfg-rpl-adversarial').checked = !!cfg.hyperparameters.rpl_adversarial;
+
+            document.getElementById('cfg-hnsw-m').value = cfg.vector_db.hnsw_m;
+            document.getElementById('cfg-hnsw-ef').value = cfg.vector_db.hnsw_ef_construct;
+            document.getElementById('cfg-quantization').value = cfg.vector_db.quantization;
+        }
+
+        async function applyConfiguration(silent) {
             const payload = {
                 backbone_type: document.getElementById('cfg-backbone').value,
                 learning_rate: parseFloat(document.getElementById('cfg-lr').value),
@@ -145,7 +172,8 @@
             };
             const resp = await fetch('/api/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
             const data = await resp.json();
-            alert(data.message || "Configuration saved.");
+            if (!silent) alert(data.message || "Configuration saved.");
+            return data;
         }
 
         function renderLastRun(m) {
@@ -227,6 +255,13 @@
             const statusEl = document.getElementById('train-status');
 
             btn.disabled = true;
+            statusEl.innerText = 'Applying current configuration...';
+
+            // Always sync whatever's currently in the form before training — otherwise a
+            // backbone/hyperparameter change that never got an explicit "Apply Configuration"
+            // click would silently train with the previous saved config instead.
+            await applyConfiguration(true);
+
             statusEl.innerText = 'Starting training run...';
 
             const startResp = await fetch('/api/train', {
@@ -269,6 +304,7 @@
         }
 
         loadHistory();
+        loadConfigIntoForm();
     </script>
 </body>
 </html>
