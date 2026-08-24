@@ -42,7 +42,6 @@
     <header>
         <h1>SOSA EW Open-Set Recognition Platform</h1>
         <span class="status-tag">DATASET</span>
-        <span class="status-tag" id="readonly-badge" style="display:none; background:#7c2d12; color:#fdba74;">READ-ONLY DEMO</span>
     </header>
     <nav class="top-nav">
         <a href="/">Training</a>
@@ -97,7 +96,7 @@
                 </div>
             </details>
 
-            <button id="gen-classification-btn" style="background: var(--accent-blue); color: #000;" onclick="generateClassificationDataset()">Generate Classification Dataset</button>
+            <button style="background: var(--accent-blue); color: #000;" onclick="generateClassificationDataset()">Generate Classification Dataset</button>
             <div id="cls-gen-status" class="hint"></div>
             </div>
 
@@ -135,11 +134,11 @@
                 </div>
             </details>
 
-            <button id="gen-interleaved-btn" style="background: #374151; color: white;" onclick="generateDataset()">Generate Interleaved Dataset</button>
+            <button style="background: #374151; color: white;" onclick="generateDataset()">Generate Interleaved Dataset</button>
 
             <label style="margin-top: 15px;">Upload Dataset File</label>
             <input type="file" id="dataset-file" accept=".csv" style="margin-top: 5px;">
-            <button id="upload-dataset-btn" style="background: #374151; color: white;" onclick="uploadDataset()">Upload Dataset</button>
+            <button style="background: #374151; color: white;" onclick="uploadDataset()">Upload Dataset</button>
 
             <label style="margin-top: 15px;">Deinterleaving Method</label>
             <select id="deinterleave-method">
@@ -369,22 +368,8 @@
             resultEl.innerHTML = html;
         }
 
-        async function applyReadOnlyMode() {
-            try {
-                const cfg = await (await fetch('/api/config')).json();
-                if (!cfg.read_only) return;
-                document.getElementById('readonly-badge').style.display = '';
-                for (const id of ['gen-classification-btn', 'gen-interleaved-btn', 'upload-dataset-btn']) {
-                    const el = document.getElementById(id);
-                    el.disabled = true;
-                    el.title = 'Disabled — read-only demo deployment';
-                }
-            } catch (e) { /* config fetch failed — leave controls as-is */ }
-        }
-
         // Try to show whatever's already on disk when the page loads.
         refreshInspector('generated', null).catch(() => {});
-        applyReadOnlyMode();
     </script>
 </body>
 </html>

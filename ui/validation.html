@@ -15,7 +15,6 @@
     <header>
         <h1>SOSA EW Open-Set Recognition Platform</h1>
         <span class="status-tag">TESTING</span>
-        <span class="status-tag" id="readonly-badge" style="display:none; background:#7c2d12; color:#fdba74;">READ-ONLY DEMO</span>
     </header>
     <nav class="top-nav">
         <a href="/">Training</a>
@@ -41,7 +40,7 @@
 
             <label>Upload Test Dataset File</label>
             <input type="file" id="test-file" accept=".csv" style="margin-top: 5px;">
-            <button id="upload-test-btn" style="background: #374151; color: white;" onclick="uploadTestDataset()">Upload Test Dataset</button>
+            <button style="background: #374151; color: white;" onclick="uploadTestDataset()">Upload Test Dataset</button>
             <div id="upload-status" class="hint"></div>
         </div>
 
@@ -185,19 +184,7 @@
             table.innerHTML = html;
         }
 
-        async function applyReadOnlyMode() {
-            try {
-                const cfg = await (await fetch('/api/config')).json();
-                if (!cfg.read_only) return;
-                document.getElementById('readonly-badge').style.display = '';
-                const el = document.getElementById('upload-test-btn');
-                el.disabled = true;
-                el.title = 'Disabled — read-only demo deployment';
-            } catch (e) { /* config fetch failed — leave controls as-is */ }
-        }
-
         loadHistory();
-        applyReadOnlyMode();
     </script>
 </body>
 </html>

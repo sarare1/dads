@@ -58,23 +58,6 @@ os.makedirs(CLASSIFICATION_DATASET_DIR, exist_ok=True)
 os.makedirs(AUTO_TEST_SAMPLE_DIR, exist_ok=True)
 init_db()
 
-READ_ONLY_MODE = os.environ.get("DADS_READ_ONLY", "0").strip().lower() in ("1", "true", "yes")
-
-
-def read_only_guard() -> Optional[JSONResponse]:
-    """Returns a 403 response if this deployment was started with DADS_READ_ONLY set, else
-    None. Used to gate every state-mutating endpoint (training, dataset generation, uploads,
-    config changes) so a shared demo deployment (e.g. for colleagues to try the current
-    trained model) can be flipped into look-but-don't-touch mode without a second codebase or
-    a real auth system — inference/testing/live simulation stay fully open either way."""
-    if not READ_ONLY_MODE:
-        return None
-    return JSONResponse(
-        {"status": "error", "message": "This is a read-only demo deployment — training, "
-                                        "dataset generation, uploads, and config changes are disabled here."},
-        status_code=403,
-    )
-
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "../../config/config.yaml")
 def load_config():
     with open(CONFIG_PATH, "r") as f:
@@ -88,7 +71,6 @@ current_config["vector_db"].setdefault("hnsw_ef_construct", 100)
 current_config["vector_db"].setdefault("quantization", "scalar")
 current_config["hyperparameters"].setdefault("rpl_loss_weight", 0.1)
 current_config["hyperparameters"].setdefault("rpl_adversarial", False)
-current_config["read_only"] = READ_ONLY_MODE
 
 MODEL_WEIGHTS_PATH = os.path.join(MODELS_DIR, "current_model_weights.pt")
 
@@ -332,9 +314,6 @@ async def update_config(cfg: ConfigUpdateModel):
     Configuration can never destroy a trained model — the currently trained weights keep
     serving Live Simulation/Inference/Testing right up until you choose to retrain, even
     after picking a different backbone here."""
-    guard = read_only_guard()
-    if guard:
-        return guard
     global current_config, vector_db
     current_config["model"]["backbone_type"] = cfg.backbone_type
     current_config["model"]["inference_engine"] = cfg.inference_engine
@@ -467,9 +446,6 @@ async def _run_training_job(req: TrainRequest):
 
 @app.post("/api/train")
 async def train(req: TrainRequest):
-    guard = read_only_guard()
-    if guard:
-        return guard
     global _training_task
     if training_status["is_training"]:
         return JSONResponse({"status": "error", "message": "Training already in progress"}, status_code=409)
@@ -520,9 +496,6 @@ async def generate_classification_dataset(req: GenerateClassificationRequest):
     random dataset_seed each call — real diversity, not the same fixed population every time —
     and persists it (+ ranges + holdout ids) to a sidecar meta.json so Training/Testing can
     reconstruct the exact same population later."""
-    guard = read_only_guard()
-    if guard:
-        return guard
     num_classes = req.num_classes
     result = build_test_dataset_rows(
         num_classes, req.num_holdout_classes, req.samples_per_class,
@@ -1077,9 +1050,6 @@ INTERLEAVED_DATASET_META = os.path.join(GENERATED_DIR, "synthetic_radar_pdws_v2_
 
 @app.post("/api/dataset/generate")
 async def generate_dataset(req: GenerateInterleavedRequest):
-    guard = read_only_guard()
-    if guard:
-        return guard
     filepath = os.path.join(GENERATED_DIR, "synthetic_radar_pdws_v2.csv")
     r = req.ranges
     result = generate_interleaved_pdws(
@@ -1107,9 +1077,6 @@ async def generate_dataset(req: GenerateInterleavedRequest):
 async def upload_dataset(file: UploadFile = File(...)):
     """Interleaved-format PDW upload (Dataset page) — consumed by Live Simulation and deinterleaving.
     Kept in a separate directory from classification-format test uploads so the two can't collide."""
-    guard = read_only_guard()
-    if guard:
-        return guard
     contents = await file.read()
     safe_name = os.path.basename(file.filename)
     save_path = os.path.join(UPLOAD_DIR, safe_name)
@@ -1121,9 +1088,6 @@ async def upload_dataset(file: UploadFile = File(...)):
 async def upload_test_dataset(file: UploadFile = File(...)):
     """Classification-format test dataset upload (Testing page) — separate from the interleaved
     upload directory so it never gets picked up by Live Simulation's dataset replay."""
-    guard = read_only_guard()
-    if guard:
-        return guard
     contents = await file.read()
     safe_name = os.path.basename(file.filename)
     save_path = os.path.join(TEST_UPLOAD_DIR, safe_name)

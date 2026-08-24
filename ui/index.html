@@ -15,7 +15,6 @@
     <header>
         <h1>SOSA EW Open-Set Recognition Platform</h1>
         <span class="status-tag">TRAINING</span>
-        <span class="status-tag" id="readonly-badge" style="display:none; background:#7c2d12; color:#fdba74;">READ-ONLY DEMO</span>
     </header>
     <nav class="top-nav">
         <a href="/" class="active">Training</a>
@@ -92,7 +91,7 @@
                 <option value="binary">Binary</option>
             </select>
 
-            <button id="apply-config-btn" onclick="applyConfiguration()">Apply Configuration</button>
+            <button onclick="applyConfiguration()">Apply Configuration</button>
             <div class="hint">Changing backbone/metric/indexing re-initializes model weights and the Qdrant collection — retrain afterward. See <a href="/help" style="color:var(--accent-blue);">Help</a> for what each field means.</div>
         </div>
 
@@ -269,20 +268,7 @@
             }, 1000);
         }
 
-        async function applyReadOnlyMode() {
-            try {
-                const cfg = await (await fetch('/api/config')).json();
-                if (!cfg.read_only) return;
-                document.getElementById('readonly-badge').style.display = '';
-                document.getElementById('train-btn').disabled = true;
-                document.getElementById('train-btn').title = 'Disabled — read-only demo deployment';
-                document.getElementById('apply-config-btn').disabled = true;
-                document.getElementById('apply-config-btn').title = 'Disabled — read-only demo deployment';
-            } catch (e) { /* config fetch failed — leave controls as-is */ }
-        }
-
         loadHistory();
-        applyReadOnlyMode();
     </script>
 </body>
 </html>
