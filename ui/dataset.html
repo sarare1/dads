@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SOSA EW Platform — Dataset</title>
+    <title>DADS - PhD Research Project — Dataset</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/static/shared.css">
     <style>
@@ -40,8 +40,11 @@
 <body>
 
     <header>
-        <h1>SOSA EW Open-Set Recognition Platform</h1>
-        <span class="status-tag">DATASET</span>
+        <h1>DADS - PhD Research Project</h1>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span class="status-tag">DATASET</span>
+            <a href="#" onclick="logout(); return false;" class="status-tag" style="background:#374151; color:#e5e7eb; cursor:pointer; text-decoration:none;">Logout</a>
+        </div>
     </header>
     <nav class="top-nav">
         <a href="/">Training</a>
@@ -366,6 +369,11 @@
                 html += '<div class="hint" style="margin-top:6px;">Run the other method too (same dataset) to compare both side by side.</div>';
             }
             resultEl.innerHTML = html;
+        }
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/login';
         }
 
         // Try to show whatever's already on disk when the page loads.

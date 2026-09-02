@@ -5,13 +5,15 @@ import pandas as pd
 import yaml
 import onnxruntime as ort
 from typing import Optional, List
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel
 import asyncio
 import json
 import time
+import hmac
+import hashlib
 from datetime import datetime, timezone
 
 from src.data.generator import frequency_to_band, normalize_pdw, build_emitter_library, sample_known_pulse, sample_ood_pulse
@@ -35,10 +37,39 @@ from src.storage.training_store import (
     init_db, insert_run, get_latest_run, get_all_runs, insert_test_run, get_all_test_runs
 )
 
-app = FastAPI(title="SOSA EW Open-Set Recognition Platform")
+app = FastAPI(title="DADS - PhD Research Project")
 
 UI_DIR = os.path.join(os.path.dirname(__file__), "../../ui")
 app.mount("/static", StaticFiles(directory=UI_DIR), name="static")
+
+# --- Auth gate -------------------------------------------------------------
+# Deliberately simple, matching the single hardcoded shared credential this app was asked to
+# use: no user table, no password hashing library, just one fixed User ID/password pair and a
+# signed cookie proving the browser already presented them once. Not meant as a real
+# multi-user auth system — it's a look-but-don't-enter gate for a shared demo deployment.
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "sararedigital"
+SESSION_COOKIE_NAME = "dads_auth"
+_SESSION_SECRET = "dads-phd-research-hardcoded-session-secret"  # static on purpose — see note above
+_SESSION_TOKEN = hmac.new(_SESSION_SECRET.encode(), b"authenticated", hashlib.sha256).hexdigest()
+_PUBLIC_PATHS = {"/login", "/api/login"}
+
+
+def _is_authenticated(cookies: dict) -> bool:
+    token = cookies.get(SESSION_COOKIE_NAME)
+    return token is not None and hmac.compare_digest(token, _SESSION_TOKEN)
+
+
+@app.middleware("http")
+async def auth_gate(request: Request, call_next):
+    path = request.url.path
+    if path in _PUBLIC_PATHS or path.startswith("/static/"):
+        return await call_next(request)
+    if not _is_authenticated(request.cookies):
+        if path.startswith("/api/"):
+            return JSONResponse({"status": "error", "message": "Not authenticated — please sign in."}, status_code=401)
+        return RedirectResponse(url="/login")
+    return await call_next(request)
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "../../data")
 GENERATED_DIR = os.path.join(DATA_DIR, "generated")
@@ -271,6 +302,32 @@ class GenerateClassificationRequest(BaseModel):
 def serve_page(filename: str):
     with open(os.path.join(UI_DIR, filename), "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.get("/login")
+async def get_login_page():
+    return serve_page("login.html")
+
+@app.post("/api/login")
+async def login(req: LoginRequest, request: Request):
+    if req.username == ADMIN_USERNAME and req.password == ADMIN_PASSWORD:
+        resp = JSONResponse({"status": "success"})
+        resp.set_cookie(
+            key=SESSION_COOKIE_NAME, value=_SESSION_TOKEN,
+            httponly=True, samesite="lax", max_age=60 * 60 * 24 * 7,
+            secure=(request.url.scheme == "https"),
+        )
+        return resp
+    return JSONResponse({"status": "error", "message": "Invalid User ID or password."}, status_code=401)
+
+@app.post("/api/logout")
+async def logout():
+    resp = JSONResponse({"status": "success"})
+    resp.delete_cookie(SESSION_COOKIE_NAME)
+    return resp
 
 @app.get("/")
 async def get_training_page():
@@ -524,11 +581,13 @@ class TestRequest(BaseModel):
     dataset_source: Optional[str] = None   # "generated" | "uploaded"; None = auto-generate fresh sample
     dataset_filename: Optional[str] = None
 
-_TEST_REQUIRED_COLUMNS = ["carrier_freq_mhz", "pulse_width_us", "pri_us", "rssi_dbm", "rise_time_ns", "true_class_id"]
+_TEST_REQUIRED_COLUMNS = ["carrier_freq_mhz", "pulse_width_us", "pri_us", "rise_time_ns", "true_class_id"]
+# rssi_dbm intentionally NOT required — the model doesn't use it (see normalize_pdw).
 
 @app.post("/api/test")
 async def run_test(req: TestRequest):
     sample_filename = None
+    dataset_seed_value = None
     if req.dataset_filename:
         directory = TEST_UPLOAD_DIR if req.dataset_source == "uploaded" else CLASSIFICATION_DATASET_DIR
         path = os.path.join(directory, os.path.basename(req.dataset_filename))
@@ -545,7 +604,7 @@ async def run_test(req: TestRequest):
             }, status_code=400)
 
         vectors = np.stack([
-            normalize_pdw(r["carrier_freq_mhz"], r["pulse_width_us"], r["pri_us"], r["rssi_dbm"], r["rise_time_ns"])
+            normalize_pdw(r["carrier_freq_mhz"], r["pulse_width_us"], r["pri_us"], r["rise_time_ns"])
             for r in df.to_dict("records")
         ]).astype(np.float32)
         labels = df["true_class_id"].astype(int).to_numpy()
@@ -557,6 +616,22 @@ async def run_test(req: TestRequest):
             "known_class_ids": sorted(set(labels[known_mask].tolist())),
             "holdout_class_ids": sorted(set(labels[~known_mask].tolist())) if (~known_mask).any() else [],
         }
+        # The raw CSV collapses every holdout/noise row to the same true_class_id = -1 sentinel
+        # (there's no other way to represent "unknown" in this format), so counting distinct
+        # values in the column above always reports at most 1 holdout class regardless of how
+        # many were actually excluded from training. The canonical Dataset-page file has a
+        # sidecar meta.json with the real pre-collapse holdout_class_ids — use it for accurate
+        # Known/Holdout reporting when evaluating that exact file (doesn't change scoring at
+        # all, since evaluate_model only needs known-vs-not-known, not which original class).
+        if (req.dataset_source != "uploaded"
+                and os.path.basename(path) == os.path.basename(CLASSIFICATION_DATASET_CSV)
+                and os.path.exists(CLASSIFICATION_DATASET_META)):
+            with open(CLASSIFICATION_DATASET_META, "r") as f:
+                meta = json.load(f)
+            if meta.get("known_class_ids") and meta.get("holdout_class_ids"):
+                dataset["known_class_ids"] = meta["known_class_ids"]
+                dataset["holdout_class_ids"] = meta["holdout_class_ids"]
+            dataset_seed_value = meta.get("dataset_seed")
         dataset_source_label = f"{req.dataset_source or 'generated'}:{os.path.basename(path)}"
     else:
         latest_run = get_latest_run()
@@ -588,10 +663,14 @@ async def run_test(req: TestRequest):
             split_seed=int(np.random.randint(1_000_000)),
         )
         dataset_source_label = f"auto-generated fresh sample (dataset_seed={reused_seed})"
+        dataset_seed_value = reused_seed
 
     distance_fn = build_distance_fn(current_config["hyperparameters"]["distance_metric"])
     metrics = evaluate_model(model, dataset, distance_fn)
     metrics.pop("centroids", None)
+
+    num_known_pulses = int(dataset["val_x"].shape[0])
+    num_openset_pulses = int(dataset["openset_x"].shape[0])
 
     record = {
         "backbone_type": current_config["model"]["backbone_type"],
@@ -605,6 +684,10 @@ async def run_test(req: TestRequest):
         "num_holdout_classes": metrics["num_holdout_classes"],
         "closed_set_accuracy": metrics["closed_set_accuracy"],
         "open_set_auroc": metrics["open_set_auroc"],
+        "num_known_pulses": num_known_pulses,
+        "num_openset_pulses": num_openset_pulses,
+        "total_pulses": num_known_pulses + num_openset_pulses,
+        "dataset_seed": dataset_seed_value,
     }
     insert_test_run(record)
 
@@ -628,7 +711,6 @@ class InferRequest(BaseModel):
     carrier_freq_mhz: float
     pulse_width_us: float
     pri_us: float
-    rssi_dbm: float
     rise_time_ns: float
 
 @app.post("/api/infer")
@@ -637,7 +719,6 @@ async def infer_single_pulse(req: InferRequest):
         freq=req.carrier_freq_mhz,
         pw=req.pulse_width_us,
         pri=req.pri_us,
-        rssi=req.rssi_dbm,
         rise=req.rise_time_ns,
         toa_ns=0,
     )
@@ -935,10 +1016,10 @@ async def dataset_analytics(source: str = "classification", filename: str = None
     # model was trained on) with an actually-trained model available.
     pca_embedding, silhouette_embedding = None, None
     if source == "classification" and prototypes_trained and label_col and \
-            all(c in df.columns for c in ["carrier_freq_mhz", "pulse_width_us", "pri_us", "rssi_dbm", "rise_time_ns"]):
+            all(c in df.columns for c in ["carrier_freq_mhz", "pulse_width_us", "pri_us", "rise_time_ns"]):
         eval_rows = df if len(df) <= max_scatter_rows else df.sample(n=max_scatter_rows, random_state=0)
         vectors = np.stack([
-            normalize_pdw(r["carrier_freq_mhz"], r["pulse_width_us"], r["pri_us"], r["rssi_dbm"], r["rise_time_ns"])
+            normalize_pdw(r["carrier_freq_mhz"], r["pulse_width_us"], r["pri_us"], r["rise_time_ns"])
             for r in eval_rows.to_dict("records")
         ]).astype(np.float32)
         with torch.no_grad():
@@ -1140,7 +1221,7 @@ async def _stream_live_feed(websocket: WebSocket, num_classes: int, duration_sec
                     track["dwell"] = sample_dwell(rng)
                 sample = sample_known_pulse(library[track["class_id"]], rng, mode=OPERATING_MODES[track["mode_idx"]])
 
-            pdw_vec = normalize_pdw(sample["freq"], sample["pw"], sample["pri"], sample["rssi"],
+            pdw_vec = normalize_pdw(sample["freq"], sample["pw"], sample["pri"],
                                      sample["rise"], toa_ns=time.time_ns() % 1_000_000_000)
             result = run_inference_pipeline(pdw_vec)
 
@@ -1200,6 +1281,9 @@ async def websocket_telemetry(websocket: WebSocket, source: str = "interleaved",
     server-side) — the closest thing to actually standing in front of a real receiver, with
     population ranges/class count configurable via the Advanced Population Ranges panel.
     """
+    if not _is_authenticated(websocket.cookies):
+        await websocket.close(code=1008)  # policy violation
+        return
     await websocket.accept()
 
     if source == "live_feed":

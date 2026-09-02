@@ -26,6 +26,7 @@ _TEST_COLUMNS = [
     "hnsw_m", "hnsw_ef_construct", "quantization",
     "dataset_source", "num_known_classes", "num_holdout_classes",
     "closed_set_accuracy", "open_set_auroc",
+    "num_known_pulses", "num_openset_pulses", "total_pulses", "dataset_seed",
 ]
 
 
@@ -55,6 +56,12 @@ def init_db():
         for col in _COLUMNS:
             try:
                 conn.execute(f"ALTER TABLE training_runs ADD COLUMN {col} TEXT")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
+        for col in _TEST_COLUMNS:
+            try:
+                conn.execute(f"ALTER TABLE test_runs ADD COLUMN {col} TEXT")
                 conn.commit()
             except sqlite3.OperationalError:
                 pass
@@ -138,7 +145,8 @@ def _test_row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
     for key in ("closed_set_accuracy", "open_set_auroc"):
         if d.get(key) is not None:
             d[key] = float(d[key])
-    for key in ("hnsw_m", "hnsw_ef_construct", "num_known_classes", "num_holdout_classes"):
+    for key in ("hnsw_m", "hnsw_ef_construct", "num_known_classes", "num_holdout_classes",
+                "num_known_pulses", "num_openset_pulses", "total_pulses", "dataset_seed"):
         if d.get(key) is not None:
             d[key] = int(float(d[key]))
     return d

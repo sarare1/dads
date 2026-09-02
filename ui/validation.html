@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SOSA EW Platform — Testing</title>
+    <title>DADS - PhD Research Project — Testing</title>
     <link rel="stylesheet" href="/static/shared.css">
     <style>
         table.history { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 10px; }
@@ -13,8 +13,11 @@
 <body>
 
     <header>
-        <h1>SOSA EW Open-Set Recognition Platform</h1>
-        <span class="status-tag">TESTING</span>
+        <h1>DADS - PhD Research Project</h1>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span class="status-tag">TESTING</span>
+            <a href="#" onclick="logout(); return false;" class="status-tag" style="background:#374151; color:#e5e7eb; cursor:pointer; text-decoration:none;">Logout</a>
+        </div>
     </header>
     <nav class="top-nav">
         <a href="/">Training</a>
@@ -149,6 +152,8 @@
                 <div class="telemetry-row"><span>Inference Engine:</span><b>${r.inference_engine}</b></div>
                 <div class="telemetry-row"><span>Qdrant (HNSW M / ef_construct / quant):</span><b>${r.hnsw_m} / ${r.hnsw_ef_construct} / ${r.quantization}</b></div>
                 <div class="telemetry-row"><span>Known / Holdout Classes:</span><b>${r.num_known_classes} / ${r.num_holdout_classes}</b></div>
+                <div class="telemetry-row"><span>Pulses Evaluated:</span><b>${r.total_pulses} total (${r.num_known_pulses} known + ${r.num_openset_pulses} open-set/holdout)</b></div>
+                <div class="telemetry-row"><span>Dataset Seed:</span><b>${r.dataset_seed ?? 'N/A (uploaded file — no generation seed recorded)'}</b></div>
                 ${data.sample_filename ? `<div class="hint" style="margin-top:8px;"><a href="/api/test/sample" style="color:var(--accent-blue);">View / download the exact generated sample</a> this run was scored against — includes ground-truth labels for your own inspection, never fed to the model as input.</div>` : ''}
                 <div class="hint">Full definitions on the <a href="/help" style="color:var(--accent-blue);">Help</a> page.</div>
             `;
@@ -166,7 +171,7 @@
             const table = document.getElementById('history-table');
             if (runs.length === 0) { table.innerHTML = ''; return; }
 
-            const headers = ['Timestamp (IST)', 'Backbone', 'Distance', 'Engine', 'Dataset Source', 'Known', 'Holdout', 'Accuracy', 'AUROC'];
+            const headers = ['Timestamp (IST)', 'Backbone', 'Distance', 'Engine', 'Dataset Source', 'Dataset Seed', 'Pulses', 'Known', 'Holdout', 'Accuracy', 'AUROC'];
             let html = '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
             for (const r of runs) {
                 html += `<tr>
@@ -175,6 +180,8 @@
                     <td>${r.distance_metric}</td>
                     <td>${r.inference_engine}</td>
                     <td>${r.dataset_source}</td>
+                    <td>${r.dataset_seed ?? 'N/A'}</td>
+                    <td>${r.total_pulses ?? 'N/A'}</td>
                     <td>${r.num_known_classes}</td>
                     <td>${r.num_holdout_classes}</td>
                     <td>${(r.closed_set_accuracy * 100).toFixed(1)}%</td>
@@ -182,6 +189,11 @@
                 </tr>`;
             }
             table.innerHTML = html;
+        }
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/login';
         }
 
         loadHistory();

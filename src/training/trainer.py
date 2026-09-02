@@ -127,7 +127,7 @@ def load_classification_csv_for_training(
     """
     rng = np.random.RandomState(split_seed)
     vectors = np.stack([
-        normalize_pdw(r["carrier_freq_mhz"], r["pulse_width_us"], r["pri_us"], r["rssi_dbm"], r["rise_time_ns"])
+        normalize_pdw(r["carrier_freq_mhz"], r["pulse_width_us"], r["pri_us"], r["rise_time_ns"])
         for r in df.to_dict("records")
     ]).astype(np.float32)
     labels = df["true_class_id"].astype(int).to_numpy()

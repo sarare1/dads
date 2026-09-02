@@ -96,14 +96,26 @@ def frequency_to_band(freq_mhz: float) -> str:
     return "KA-BAND"
 
 
-def normalize_pdw(freq: float, pw: float, pri: float, rssi: float, rise: float,
+def normalize_pdw(freq: float, pw: float, pri: float, rise: float,
                    toa_ns: int = 0) -> np.ndarray:
-    """Maps raw physical PDW units to the model's normalized 6-dim input space."""
+    """Maps raw physical PDW units to the model's normalized 6-dim input space.
+
+    RSSI/amplitude is deliberately NOT a model input: unlike frequency/PW/PRI/rise-time
+    (intrinsic to the emitter's own waveform), RSSI is dominated by range, antenna pointing,
+    and receiver AGC calibration — genuinely hard to derive consistently on real intercept
+    hardware, and not an emitter fingerprint in the first place. It's still simulated and
+    recorded in raw PDW metadata for display/Analytics, just never fed into the model.
+
+    Duty cycle (PW/PRI) fills the freed input slot instead — a direct interaction term
+    between two already-present inputs that a single Linear classifier head can't otherwise
+    construct on its own, and one of the strongest Operating-Mode signals in this dataset
+    (search vs. track vs. illumination)."""
+    duty_cycle = pw / pri if pri > 0 else 0.0
     return np.array([
         freq / 25000.0,
         pw / 100.0,
         pri / 2000.0,
-        (rssi + 100) / 100,
+        duty_cycle,
         (toa_ns / 1e9),
         rise / 200.0
     ], dtype=np.float32)

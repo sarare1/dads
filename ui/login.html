@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DADS - PhD Research Project — Sign In</title>
+    <link rel="stylesheet" href="/static/shared.css">
+    <style>
+        body { align-items: center; justify-content: center; }
+        .login-card {
+            width: 360px; max-width: 90vw;
+            background-color: var(--panel-bg); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 28px 26px;
+        }
+        .login-title { text-align: center; margin-bottom: 4px; }
+        .login-title h1 { font-size: 14pt; }
+        .login-sub { text-align: center; color: #9ca3af; font-size: 9pt; margin-bottom: 22px; }
+        input[type="password"] {
+            width: 100%; background: #1f2937; border: 1px solid #374151; color: white;
+            padding: 6px; border-radius: 4px; margin-top: 4px; box-sizing: border-box;
+        }
+        #login-error {
+            display: none; background: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626;
+            border-radius: 4px; padding: 8px 10px; font-size: 8.5pt; margin-top: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-card">
+        <div class="login-title"><h1>DADS - PhD Research Project</h1></div>
+        <div class="login-sub">Sign in to continue</div>
+
+        <label>User ID</label>
+        <input type="text" id="login-user" autocomplete="username" autofocus>
+
+        <label>Password</label>
+        <input type="password" id="login-pass" autocomplete="current-password">
+
+        <button onclick="doLogin()">Sign In</button>
+        <div id="login-error"></div>
+    </div>
+
+    <script>
+        async function doLogin() {
+            const username = document.getElementById('login-user').value;
+            const password = document.getElementById('login-pass').value;
+            const errEl = document.getElementById('login-error');
+            errEl.style.display = 'none';
+
+            const resp = await fetch('/api/login', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ username, password })
+            });
+            if (resp.ok) {
+                window.location.href = '/';
+                return;
+            }
+            const data = await resp.json().catch(() => ({}));
+            errEl.innerText = data.message || 'Invalid User ID or password.';
+            errEl.style.display = 'block';
+        }
+
+        document.getElementById('login-pass').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') doLogin();
+        });
+    </script>
+</body>
+</html>

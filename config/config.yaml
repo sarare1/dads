@@ -4,7 +4,7 @@ system:
 
 model:
   backbone_type: "hybrid"  # Options: cnn1d, transformer, hybrid
-  input_dim: 6            # PDW Features: fc, PW, PRI, RSSI, ToA, rise_time
+  input_dim: 6            # PDW Features: fc, PW, PRI, duty_cycle (PW/PRI), ToA, rise_time
   embedding_dim: 128
   num_classes: 20
   dropout: 0.15

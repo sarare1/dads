@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SOSA EW Platform — Live Simulation</title>
+    <title>DADS - PhD Research Project — Live Simulation</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/static/shared.css">
     <style>
@@ -83,7 +83,7 @@
 <body>
 
     <header>
-        <h1>SOSA EW Open-Set Recognition Platform</h1>
+        <h1>DADS - PhD Research Project</h1>
         <div style="display:flex; align-items:center;">
             <div class="source-select-wrap">
                 <label style="margin:0; font-size:8pt; color:#9ca3af;">Replay:</label>
@@ -98,6 +98,7 @@
             <span class="status-tag" id="conn-status">IDLE</span>
             <span class="status-tag engine" id="engine-indicator">ENGINE: PYTORCH</span>
             <span class="status-tag" id="prototype-indicator" style="background:#7f1d1d;color:#fca5a5;">PROTOTYPES: RANDOM (UNTRAINED)</span>
+            <a href="#" onclick="logout(); return false;" class="status-tag" style="background:#374151; color:#e5e7eb; cursor:pointer; text-decoration:none;">Logout</a>
         </div>
     </header>
     <nav class="top-nav">
@@ -201,6 +202,11 @@
     </div>
 
     <script>
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+
         let ws = null;
         let counts = { total: 0, known: 0, unknown: 0, rejected: 0, correct: 0, verifiable: 0 };
         const MAX_LOG_ROWS = 30;

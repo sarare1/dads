@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SOSA EW Platform — Training</title>
+    <title>DADS - PhD Research Project — Training</title>
     <link rel="stylesheet" href="/static/shared.css">
     <style>
         table.history { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 10px; }
@@ -13,8 +13,11 @@
 <body>
 
     <header>
-        <h1>SOSA EW Open-Set Recognition Platform</h1>
-        <span class="status-tag">TRAINING</span>
+        <h1>DADS - PhD Research Project</h1>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span class="status-tag">TRAINING</span>
+            <a href="#" onclick="logout(); return false;" class="status-tag" style="background:#374151; color:#e5e7eb; cursor:pointer; text-decoration:none;">Logout</a>
+        </div>
     </header>
     <nav class="top-nav">
         <a href="/" class="active">Training</a>
@@ -301,6 +304,11 @@
                     await loadHistory();
                 } catch (e) { /* ignore transient poll errors, keep retrying */ }
             }, 1000);
+        }
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/login';
         }
 
         loadHistory();

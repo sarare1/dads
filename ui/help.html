@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SOSA EW Platform — Help</title>
+    <title>DADS - PhD Research Project — Help</title>
     <link rel="stylesheet" href="/static/shared.css">
 </head>
 <body>
 
     <header>
-        <h1>SOSA EW Open-Set Recognition Platform</h1>
-        <span class="status-tag">HELP</span>
+        <h1>DADS - PhD Research Project</h1>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span class="status-tag">HELP</span>
+            <a href="#" onclick="logout(); return false;" class="status-tag" style="background:#374151; color:#e5e7eb; cursor:pointer; text-decoration:none;">Logout</a>
+        </div>
     </header>
     <nav class="top-nav">
         <a href="/">Training</a>
@@ -78,7 +81,7 @@
             <div class="glossary-term">PRF (Pulse Repetition Frequency)</div>
             <div class="glossary-def">The reciprocal of PRI (PRF = 1 / PRI), in Hz — how many pulses per second the emitter transmits. Shown on the Analytics page as an alternative view of the same timing information PRI carries.</div>
             <div class="glossary-term">RSSI (Received Signal Strength Indicator)</div>
-            <div class="glossary-def">Received power of the pulse, in dBm (decibel-milliwatts). Also labeled "Amplitude" in some raw dataset columns — same quantity.</div>
+            <div class="glossary-def">Received power of the pulse, in dBm (decibel-milliwatts). Also labeled "Amplitude" in some raw dataset columns — same quantity. <b>Not a model input</b> — unlike frequency/PW/PRI/rise-time, RSSI is dominated by range, antenna pointing, and receiver calibration rather than being an intrinsic emitter fingerprint, and is genuinely difficult to derive consistently on real intercept hardware. It's still simulated and shown here (and in Analytics) for descriptive/telemetry purposes, and datasets that lack it entirely are still fully usable.</div>
             <div class="glossary-term">Time of Arrival (ToA)</div>
             <div class="glossary-def">Precise timestamp the pulse was received, in nanoseconds. Used to reconstruct interleaved pulse trains from multiple emitters (deinterleaving) and to derive PRI as the delta between consecutive ToAs.</div>
             <div class="glossary-term">Rise Time</div>
@@ -86,7 +89,7 @@
             <div class="glossary-term">Angle of Arrival (AOA)</div>
             <div class="glossary-def">The bearing, in degrees, the pulse's wavefront arrived from (as measured by a hypothetical multi-element receiver array). Used only by the Interleaved Dataset's classical (DBSCAN) deinterleaving method as an extra clustering feature — the Classification Dataset does not use it, since AOA identifies platform bearing, not emitter identity.</div>
             <div class="glossary-term">Duty Cycle</div>
-            <div class="glossary-def">Percentage of time the emitter is actually transmitting: (Pulse Width / PRI) × 100. Low duty cycle (search radars, long PRI) vs. high duty cycle (illumination/track radars, short PRI) is itself a strong Operating Mode signal, shown on the Analytics page.</div>
+            <div class="glossary-def">Fraction of time the emitter is actually transmitting: Pulse Width / PRI. Low duty cycle (search radars, long PRI) vs. high duty cycle (illumination/track radars, short PRI) is itself a strong Operating Mode signal. <b>A model input</b> — computed on the fly inside <code>normalize_pdw()</code> from the Pulse Width and PRI already provided; it occupies the input slot RSSI used to fill, since it's a genuine PW×PRI interaction a single linear classifier layer can't otherwise construct on its own. Also shown on the Analytics page as a percentage.</div>
             <div class="glossary-term">Inter-Pulse Interval (raw stream)</div>
             <div class="glossary-def">The literal ToA gap between any two consecutive pulses in the raw, interleaved (multi-emitter) receive stream — not the same as PRI, which is the gap between two pulses from the <i>same</i> emitter. Deinterleaving is precisely the problem of recovering per-emitter PRI out of this mixed raw sequence.</div>
         </div>
@@ -270,5 +273,12 @@
         </div>
 
     </div>
+
+    <script>
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+    </script>
 </body>
 </html>
