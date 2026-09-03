@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 
 from src.data.generator import normalize_pdw
 
-REQUIRED_COLUMNS = ["toa_ns", "pw_ns", "frequency_mhz", "amplitude_dbm"]
+REQUIRED_COLUMNS = ["toa_ns", "pw_ns", "frequency_mhz"]
 DEFAULT_RISE_TIME_NS = 50.0  # used only if an uploaded CSV lacks this column
 
 
@@ -56,9 +56,6 @@ def row_to_pdw_vector(row: pd.Series, prev_toa_ns: Optional[int]) -> Tuple[np.nd
         "carrier_freq_mhz": round(float(row["frequency_mhz"]), 2),
         "pulse_width_us": round(float(pw_us), 3),
         "pri_us": round(float(pri_us), 2),
-        # RSSI is not a model input (see normalize_pdw) — kept here only as descriptive
-        # telemetry, tolerant of datasets that genuinely lack it.
-        "rssi_dbm": round(float(row["amplitude_dbm"]), 1) if "amplitude_dbm" in row and pd.notna(row["amplitude_dbm"]) else None,
         "toa_ns": int(row["toa_ns"]),
         "rise_time_ns": round(float(row["rise_time_ns"]), 1),
         "true_label": str(row["emitter_class"]) if "emitter_class" in row else "UNLABELED",
@@ -68,8 +65,6 @@ def row_to_pdw_vector(row: pd.Series, prev_toa_ns: Optional[int]) -> Tuple[np.nd
 
 
 CLASSIFICATION_REQUIRED_COLUMNS = ["carrier_freq_mhz", "pulse_width_us", "pri_us", "rise_time_ns", "true_class_id", "true_label"]
-# rssi_dbm is intentionally NOT required — the model doesn't use it (see normalize_pdw), so a
-# real-world dataset that genuinely can't derive RSSI is still fully usable.
 
 
 def load_classification_replay_dataset(path: str) -> pd.DataFrame:
@@ -100,9 +95,6 @@ def classification_row_to_pdw_vector(row: pd.Series) -> Tuple[np.ndarray, dict]:
         "carrier_freq_mhz": round(float(row["carrier_freq_mhz"]), 2),
         "pulse_width_us": round(float(row["pulse_width_us"]), 3),
         "pri_us": round(float(row["pri_us"]), 2),
-        # RSSI is not a model input (see normalize_pdw) — kept here only as descriptive
-        # telemetry, tolerant of datasets that genuinely lack it.
-        "rssi_dbm": round(float(row["rssi_dbm"]), 1) if "rssi_dbm" in row and pd.notna(row["rssi_dbm"]) else None,
         "toa_ns": None,
         "rise_time_ns": round(float(row["rise_time_ns"]), 1),
         "true_label": str(row["true_label"]),

@@ -17,7 +17,7 @@ _COLUMNS = [
     "training_duration_seconds", "loss_curve_json",
     "dataset_seed",
     "freq_min_mhz", "freq_max_mhz", "pw_min_us", "pw_max_us",
-    "pri_min_us", "pri_max_us", "rssi_min_dbm", "rssi_max_dbm",
+    "pri_min_us", "pri_max_us", "rssi_min_dbm", "rssi_max_dbm",  # rssi_* unused since RSSI's removal — kept for old rows, always NULL going forward
     "rise_min_ns", "rise_max_ns",
 ]
 

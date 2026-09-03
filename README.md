@@ -87,8 +87,11 @@ PDW input (6-dim, normalized) -> Backbone -> ┬─> Classifier Head  -> softmax
 ```
 
 **Input features** (`src/data/generator.py::normalize_pdw`): carrier frequency, pulse width,
-PRI, RSSI, time-of-arrival, rise time — each independently scaled into a roughly `[0,1]`
-range before entering the network.
+PRI, duty cycle (pulse width / PRI), time-of-arrival, rise time — each independently scaled
+into a roughly `[0,1]` range before entering the network. RSSI/amplitude is deliberately
+excluded entirely: it's dominated by range, antenna pointing, and receiver calibration rather
+than being an intrinsic emitter fingerprint, and is genuinely hard to derive consistently on
+real intercept hardware.
 
 **Backbone options** (`src/models/backbones.py`, selectable per training run):
 - `cnn1d` — two 1D-conv layers over the 6-dim feature vector.
@@ -158,7 +161,7 @@ Generated from the Dataset page's blue **Classifier Pipeline** panel. The *only*
 classifier trains/tests on.
 
 - **Real hyperparameters, not hardcoded**: Number of Classes, Holdout Classes, Samples per
-  Known Class, Noise Percentage, and 10 population-range fields (frequency/PW/PRI/RSSI/rise) —
+  Known Class, Noise Percentage, and 8 population-range fields (frequency/PW/PRI/rise) —
   all set per generation, persisted to `classification_dataset_meta.json`.
 - **Open-set protocol**: `Holdout Classes` are entirely excluded from training and evaluated
   only as "unknown" — the standard open-set recognition benchmark methodology, not just noisy

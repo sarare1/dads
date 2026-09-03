@@ -43,7 +43,6 @@
                     <tr><td>PRI</td><td style="text-align:left;">Pulse Repetition Interval</td></tr>
                     <tr><td>PRF</td><td style="text-align:left;">Pulse Repetition Frequency (= 1 / PRI)</td></tr>
                     <tr><td>PW</td><td style="text-align:left;">Pulse Width</td></tr>
-                    <tr><td>RSSI</td><td style="text-align:left;">Received Signal Strength Indicator</td></tr>
                     <tr><td>AOA</td><td style="text-align:left;">Angle of Arrival</td></tr>
                     <tr><td>fc</td><td style="text-align:left;">Carrier frequency (symbol, not an acronym)</td></tr>
                     <tr><td>OOD</td><td style="text-align:left;">Out-of-Distribution — data unlike anything the model was trained on</td></tr>
@@ -80,8 +79,6 @@
             <div class="glossary-def">Time between consecutive pulses from the same emitter, in microseconds (or nanoseconds for the Interleaved Dataset). Reveals the emitter's timing pattern — see PRI Modulation Patterns below.</div>
             <div class="glossary-term">PRF (Pulse Repetition Frequency)</div>
             <div class="glossary-def">The reciprocal of PRI (PRF = 1 / PRI), in Hz — how many pulses per second the emitter transmits. Shown on the Analytics page as an alternative view of the same timing information PRI carries.</div>
-            <div class="glossary-term">RSSI (Received Signal Strength Indicator)</div>
-            <div class="glossary-def">Received power of the pulse, in dBm (decibel-milliwatts). Also labeled "Amplitude" in some raw dataset columns — same quantity. <b>Not a model input</b> — unlike frequency/PW/PRI/rise-time, RSSI is dominated by range, antenna pointing, and receiver calibration rather than being an intrinsic emitter fingerprint, and is genuinely difficult to derive consistently on real intercept hardware. It's still simulated and shown here (and in Analytics) for descriptive/telemetry purposes, and datasets that lack it entirely are still fully usable.</div>
             <div class="glossary-term">Time of Arrival (ToA)</div>
             <div class="glossary-def">Precise timestamp the pulse was received, in nanoseconds. Used to reconstruct interleaved pulse trains from multiple emitters (deinterleaving) and to derive PRI as the delta between consecutive ToAs.</div>
             <div class="glossary-term">Rise Time</div>
@@ -89,7 +86,7 @@
             <div class="glossary-term">Angle of Arrival (AOA)</div>
             <div class="glossary-def">The bearing, in degrees, the pulse's wavefront arrived from (as measured by a hypothetical multi-element receiver array). Used only by the Interleaved Dataset's classical (DBSCAN) deinterleaving method as an extra clustering feature — the Classification Dataset does not use it, since AOA identifies platform bearing, not emitter identity.</div>
             <div class="glossary-term">Duty Cycle</div>
-            <div class="glossary-def">Fraction of time the emitter is actually transmitting: Pulse Width / PRI. Low duty cycle (search radars, long PRI) vs. high duty cycle (illumination/track radars, short PRI) is itself a strong Operating Mode signal. <b>A model input</b> — computed on the fly inside <code>normalize_pdw()</code> from the Pulse Width and PRI already provided; it occupies the input slot RSSI used to fill, since it's a genuine PW×PRI interaction a single linear classifier layer can't otherwise construct on its own. Also shown on the Analytics page as a percentage.</div>
+            <div class="glossary-def">Fraction of time the emitter is actually transmitting: Pulse Width / PRI. Low duty cycle (search radars, long PRI) vs. high duty cycle (illumination/track radars, short PRI) is itself a strong Operating Mode signal. <b>A model input</b> — computed on the fly inside <code>normalize_pdw()</code> from the Pulse Width and PRI already provided, since it's a genuine PW×PRI interaction a single linear classifier layer can't otherwise construct on its own. Also shown on the Analytics page as a percentage.</div>
             <div class="glossary-term">Inter-Pulse Interval (raw stream)</div>
             <div class="glossary-def">The literal ToA gap between any two consecutive pulses in the raw, interleaved (multi-emitter) receive stream — not the same as PRI, which is the gap between two pulses from the <i>same</i> emitter. Deinterleaving is precisely the problem of recovering per-emitter PRI out of this mixed raw sequence.</div>
         </div>
@@ -174,7 +171,7 @@
             <div class="glossary-term">Enable Adversarial Training (ARPL)</div>
             <div class="glossary-def">Upgrades RPL to the full ARPL (Adversarial Reciprocal Points Learning) mechanism: a generator network adversarially synthesizes "confusing" embeddings targeting each known class, and the classifier is trained (in a min-max game) to keep rejecting them as open-space even as the generator tries to make them pass as genuine. Tightens the decision boundary beyond RPL's passive open-space margin loss, at the cost of a less stable, sometimes slower-converging run. Off by default — toggle it and retrain to get a genuine RPL-vs-ARPL comparison across two separate runs (both show up in Run History, each labeled with which mode produced its AUROC number).</div>
             <div class="glossary-term">Dataset Seed</div>
-            <div class="glossary-def">Controls both which radar-family archetypes (frequency/pulse-width/PRI/RSSI/rise) get generated and which classes are randomly held out — a fresh seed is drawn every training run for genuine diversity. Testing's auto-generate mode reuses the exact seed from your last training run so it evaluates the same population the model was actually trained on, not a different one.</div>
+            <div class="glossary-def">Controls both which radar-family archetypes (frequency/pulse-width/PRI/rise-time) get generated and which classes are randomly held out — a fresh seed is drawn every training run for genuine diversity. Testing's auto-generate mode reuses the exact seed from your last training run so it evaluates the same population the model was actually trained on, not a different one.</div>
         </div>
 
         <div class="glossary-section">

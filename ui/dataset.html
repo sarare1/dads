@@ -92,8 +92,6 @@
                     <div><label>Pulse Width Max (µs)</label><input type="number" id="cls-range-pw-max" value="50"></div>
                     <div><label>PRI Min (µs)</label><input type="number" id="cls-range-pri-min" value="10"></div>
                     <div><label>PRI Max (µs)</label><input type="number" id="cls-range-pri-max" value="1000"></div>
-                    <div><label>RSSI Min (dBm)</label><input type="number" id="cls-range-rssi-min" value="-80"></div>
-                    <div><label>RSSI Max (dBm)</label><input type="number" id="cls-range-rssi-max" value="-20"></div>
                     <div><label>Rise Time Min (ns)</label><input type="number" id="cls-range-rise-min" value="5"></div>
                     <div><label>Rise Time Max (ns)</label><input type="number" id="cls-range-rise-max" value="150"></div>
                 </div>
@@ -212,8 +210,6 @@
                     pw_max_us: parseFloat(document.getElementById('cls-range-pw-max').value),
                     pri_min_us: parseFloat(document.getElementById('cls-range-pri-min').value),
                     pri_max_us: parseFloat(document.getElementById('cls-range-pri-max').value),
-                    rssi_min_dbm: parseFloat(document.getElementById('cls-range-rssi-min').value),
-                    rssi_max_dbm: parseFloat(document.getElementById('cls-range-rssi-max').value),
                     rise_min_ns: parseFloat(document.getElementById('cls-range-rise-min').value),
                     rise_max_ns: parseFloat(document.getElementById('cls-range-rise-max').value),
                 }

@@ -130,8 +130,6 @@
                 <div><label>Pulse Width Max (µs)</label><input type="number" id="lf-pw-max" value="50"></div>
                 <div><label>PRI Min (µs)</label><input type="number" id="lf-pri-min" value="10"></div>
                 <div><label>PRI Max (µs)</label><input type="number" id="lf-pri-max" value="1000"></div>
-                <div><label>RSSI Min (dBm)</label><input type="number" id="lf-rssi-min" value="-80"></div>
-                <div><label>RSSI Max (dBm)</label><input type="number" id="lf-rssi-max" value="-20"></div>
                 <div><label>Rise Time Min (ns)</label><input type="number" id="lf-rise-min" value="5"></div>
                 <div><label>Rise Time Max (ns)</label><input type="number" id="lf-rise-max" value="150"></div>
             </div>
@@ -156,7 +154,7 @@
                 <table class="threat-log" id="detail-table" style="width:100%;">
                     <thead><tr>
                         <th>Pulse</th><th>Predicted Class</th><th>Conf.</th><th>Verdict</th><th>ECM Action</th>
-                        <th>Freq (MHz)</th><th>PW (µs)</th><th>PRI (µs)</th><th>RSSI (dBm)</th><th>Rise Time (ns)</th>
+                        <th>Freq (MHz)</th><th>PW (µs)</th><th>PRI (µs)</th><th>Rise Time (ns)</th>
                         <th id="detail-correct-header" style="display:none;">Correct?</th>
                     </tr></thead>
                     <tbody id="detail-table-body"></tbody>
@@ -353,8 +351,6 @@
                     pw_max_us: document.getElementById('lf-pw-max').value,
                     pri_min_us: document.getElementById('lf-pri-min').value,
                     pri_max_us: document.getElementById('lf-pri-max').value,
-                    rssi_min_dbm: document.getElementById('lf-rssi-min').value,
-                    rssi_max_dbm: document.getElementById('lf-rssi-max').value,
                     rise_min_ns: document.getElementById('lf-rise-min').value,
                     rise_max_ns: document.getElementById('lf-rise-max').value,
                 });
@@ -545,7 +541,6 @@
                     <td>${d.pdw_meta.carrier_freq_mhz}</td>
                     <td>${d.pdw_meta.pulse_width_us}</td>
                     <td>${d.pdw_meta.pri_us}</td>
-                    <td>${d.pdw_meta.rssi_dbm}</td>
                     <td>${d.pdw_meta.rise_time_ns}</td>
                     ${correctCell}
                 `;

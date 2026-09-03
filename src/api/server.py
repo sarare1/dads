@@ -270,8 +270,6 @@ class DatasetRanges(BaseModel):
     pw_max_us: float = 50.0
     pri_min_us: float = 10.0
     pri_max_us: float = 1000.0
-    rssi_min_dbm: float = -80.0
-    rssi_max_dbm: float = -20.0
     rise_min_ns: float = 5.0
     rise_max_ns: float = 150.0
 
@@ -280,7 +278,6 @@ class DatasetRanges(BaseModel):
             "freq_range": (self.freq_min_mhz, self.freq_max_mhz),
             "pw_range": (self.pw_min_us, self.pw_max_us),
             "pri_range": (self.pri_min_us, self.pri_max_us),
-            "rssi_range": (self.rssi_min_dbm, self.rssi_max_dbm),
             "rise_range": (self.rise_min_ns, self.rise_max_ns),
         }
 
@@ -582,7 +579,6 @@ class TestRequest(BaseModel):
     dataset_filename: Optional[str] = None
 
 _TEST_REQUIRED_COLUMNS = ["carrier_freq_mhz", "pulse_width_us", "pri_us", "rise_time_ns", "true_class_id"]
-# rssi_dbm intentionally NOT required — the model doesn't use it (see normalize_pdw).
 
 @app.post("/api/test")
 async def run_test(req: TestRequest):
@@ -774,7 +770,6 @@ _NUMERIC_FEATURE_ALIASES = {
     "frequency_mhz": ["frequency_mhz", "carrier_freq_mhz"],
     "pulse_width": ["pw_ns", "pulse_width_us"],
     "pri_us": ["pri_us"],
-    "amplitude_dbm": ["amplitude_dbm", "rssi_dbm"],
     "rise_time_ns": ["rise_time_ns"],
     "aoa_deg": ["aoa_deg"],
 }
@@ -1180,7 +1175,7 @@ MAX_LIVE_FEED_SECONDS = 900  # hard server-side cap (15 min) regardless of what 
 
 
 async def _stream_live_feed(websocket: WebSocket, num_classes: int, duration_seconds: int,
-                             freq_range, pw_range, pri_range, rssi_range, rise_range):
+                             freq_range, pw_range, pri_range, rise_range):
     """Genuinely continuous, unlabeled real-time generation — no CSV, nothing persisted,
     nothing pre-computed. Each pulse is drawn fresh and pushed the instant it's generated,
     exactly mirroring how a real ESM operator actually experiences a live feed: sensor
@@ -1194,7 +1189,7 @@ async def _stream_live_feed(websocket: WebSocket, num_classes: int, duration_sec
     duration_seconds = min(max(duration_seconds, 10), MAX_LIVE_FEED_SECONDS)
     seed = int(np.random.randint(1_000_000))
     library = build_emitter_library(num_classes, seed=seed, freq_range=freq_range, pw_range=pw_range,
-                                     pri_range=pri_range, rssi_range=rssi_range, rise_range=rise_range)
+                                     pri_range=pri_range, rise_range=rise_range)
     rng = np.random.RandomState()  # unseeded — genuine fresh entropy per pulse, not a reproducible sequence
 
     # A handful of persistent simulated emitters, each with its own evolving operating mode —
@@ -1229,7 +1224,6 @@ async def _stream_live_feed(websocket: WebSocket, num_classes: int, duration_sec
                 "carrier_freq_mhz": round(float(sample["freq"]), 2),
                 "pulse_width_us": round(float(sample["pw"]), 3),
                 "pri_us": round(float(sample["pri"]), 2),
-                "rssi_dbm": round(float(sample["rssi"]), 1),
                 "rise_time_ns": round(float(sample["rise"]), 1),
                 # No true_label / class_id / operating_mode / is_correct — this mode never
                 # exposes ground truth at all, matching genuine real-time operation.
@@ -1258,7 +1252,6 @@ async def websocket_telemetry(websocket: WebSocket, source: str = "interleaved",
                                freq_min_mhz: float = 2000.0, freq_max_mhz: float = 18000.0,
                                pw_min_us: float = 0.5, pw_max_us: float = 50.0,
                                pri_min_us: float = 10.0, pri_max_us: float = 1000.0,
-                               rssi_min_dbm: float = -80.0, rssi_max_dbm: float = -20.0,
                                rise_min_ns: float = 5.0, rise_max_ns: float = 150.0):
     """Replays a PDW dataset pulse-by-pulse through the live inference pipeline, stopping
     automatically at the last row — Pulse ID is always bounded by that dataset's real row
@@ -1290,7 +1283,7 @@ async def websocket_telemetry(websocket: WebSocket, source: str = "interleaved",
         await _stream_live_feed(
             websocket, num_classes, duration_seconds,
             (freq_min_mhz, freq_max_mhz), (pw_min_us, pw_max_us), (pri_min_us, pri_max_us),
-            (rssi_min_dbm, rssi_max_dbm), (rise_min_ns, rise_max_ns),
+            (rise_min_ns, rise_max_ns),
         )
         return
 

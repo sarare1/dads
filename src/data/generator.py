@@ -11,7 +11,6 @@ def build_emitter_library(
     freq_range: Tuple[float, float] = (2000.0, 18000.0),
     pw_range: Tuple[float, float] = (0.5, 50.0),
     pri_range: Tuple[float, float] = (10.0, 1000.0),
-    rssi_range: Tuple[float, float] = (-80.0, -20.0),
     rise_range: Tuple[float, float] = (5.0, 150.0),
 ) -> Dict[int, Dict[str, float]]:
     """Builds base PDW centroids for `num_classes` radar families. Shared by the live
@@ -33,7 +32,6 @@ def build_emitter_library(
             "freq": rng.uniform(*freq_range),
             "pw": rng.uniform(*pw_range),        # Pulse Width in us
             "pri": rng.uniform(*pri_range),      # Delta ToA / PRI in us
-            "rssi": rng.uniform(*rssi_range),    # RSSI in dBm
             "rise": rng.uniform(*rise_range),    # Rise time in ns
             "pri_pattern": rng.choice(PRI_PATTERN_TYPES),
         }
@@ -63,7 +61,6 @@ def sample_known_pulse(params: Dict[str, float], rng: np.random.RandomState = No
         "freq": params["freq"] * mode["freq_mult"] + rng.normal(0, 15.0),
         "pw": params["pw"] * mode["pw_mult"] + rng.normal(0, 0.2),
         "pri": sample_pri_marginal(pri_pattern, base_pri, rng),
-        "rssi": params["rssi"] + rng.normal(0, 2.0),
         "rise": params["rise"] + rng.normal(0, 1.0),
         "mode": mode["name"],
     }
@@ -80,7 +77,6 @@ def sample_ood_pulse(rng: np.random.RandomState = None) -> Dict[str, float]:
         "freq": rng.uniform(4000.0, 30000.0),  # overlaps most of the known 2000-18000 band, extends beyond it
         "pw": rng.uniform(0.1, 5.0),
         "pri": rng.uniform(2.0, 60.0),
-        "rssi": rng.uniform(-60.0, -10.0),
         "rise": rng.uniform(1.0, 20.0),
     }
 
@@ -100,11 +96,11 @@ def normalize_pdw(freq: float, pw: float, pri: float, rise: float,
                    toa_ns: int = 0) -> np.ndarray:
     """Maps raw physical PDW units to the model's normalized 6-dim input space.
 
-    RSSI/amplitude is deliberately NOT a model input: unlike frequency/PW/PRI/rise-time
-    (intrinsic to the emitter's own waveform), RSSI is dominated by range, antenna pointing,
-    and receiver AGC calibration — genuinely hard to derive consistently on real intercept
-    hardware, and not an emitter fingerprint in the first place. It's still simulated and
-    recorded in raw PDW metadata for display/Analytics, just never fed into the model.
+    RSSI/amplitude is deliberately excluded entirely — not just as a model input, but from
+    the simulator altogether: unlike frequency/PW/PRI/rise-time (intrinsic to the emitter's
+    own waveform), RSSI is dominated by range, antenna pointing, and receiver AGC
+    calibration — genuinely hard to derive consistently on real intercept hardware, and not
+    an emitter fingerprint in the first place.
 
     Duty cycle (PW/PRI) fills the freed input slot instead — a direct interaction term
     between two already-present inputs that a single Linear classifier head can't otherwise

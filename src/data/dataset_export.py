@@ -102,7 +102,6 @@ def generate_interleaved_pdws(
                     'toa_ns': current_time,
                     'pw_ns': int(rng.normal(em['pw'] * mode['pw_mult'], em['pw'] * mode['pw_mult'] * 0.05)),
                     'frequency_mhz': round(float(rng.normal(em['freq'] * mode['freq_mult'], 2.0)), 2),
-                    'amplitude_dbm': round(float(rng.uniform(-80, -20)), 1),
                     'aoa_deg': round(float(rng.normal(em['aoa'], 0.5)), 1),
                     'rise_time_ns': round(float(rng.normal(em['rise'], em['rise'] * 0.05)), 2),
                     'emitter_class': em['class'],
