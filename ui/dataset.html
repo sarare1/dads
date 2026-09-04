@@ -99,6 +99,14 @@
 
             <button style="background: var(--accent-blue); color: #000;" onclick="generateClassificationDataset()">Generate Classification Dataset</button>
             <div id="cls-gen-status" class="hint"></div>
+
+            <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                <div class="card-title" style="font-size: 9pt;">Or Use Your Own Offline Dataset</div>
+                <div class="hint" style="margin-bottom: 8px;">Upload a CSV with columns <code>carrier_freq_mhz, pulse_width_us, pri_us, rise_time_ns, true_class_id</code> (optionally <code>true_label</code>). Use <code>true_class_id = -1</code> to mark holdout/unknown rows for open-set testing. This replaces the dataset above — Train Model then trains on your file directly.</div>
+                <input type="file" id="cls-upload-file" accept=".csv">
+                <button style="background: var(--accent-blue); color: #000; margin-top: 8px;" onclick="uploadClassificationDataset()">Upload &amp; Use for Training</button>
+                <div id="cls-upload-status" class="hint"></div>
+            </div>
             </div>
 
             <div class="pipeline-panel pipeline-deinterleave">
@@ -235,6 +243,29 @@
 
             await refreshInspector('classification', 'classification_dataset.csv');
             statusEl.innerText = 'Generated — ready for Train Model on the Training page.';
+        }
+
+        async function uploadClassificationDataset() {
+            const statusEl = document.getElementById('cls-upload-status');
+            const fileInput = document.getElementById('cls-upload-file');
+            if (!fileInput.files.length) {
+                statusEl.innerText = 'Choose a CSV file first.';
+                return;
+            }
+            statusEl.innerText = 'Uploading...';
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            const resp = await fetch('/api/dataset/upload_classification', { method: 'POST', body: formData });
+            const result = await resp.json();
+            if (!resp.ok || result.status !== 'success') {
+                statusEl.innerText = 'Failed: ' + (result.message || 'Upload error.');
+                return;
+            }
+
+            await refreshInspector('classification', 'classification_dataset.csv');
+            statusEl.innerText = `Uploaded — ${result.num_classes} known classes, ${result.known_rows} known rows, ` +
+                `${result.openset_rows} holdout/unknown rows. Ready for Train Model on the Training page.`;
         }
 
         async function generateDataset() {

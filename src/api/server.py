@@ -580,6 +580,79 @@ class TestRequest(BaseModel):
 
 _TEST_REQUIRED_COLUMNS = ["carrier_freq_mhz", "pulse_width_us", "pri_us", "rise_time_ns", "true_class_id"]
 
+@app.post("/api/dataset/upload_classification")
+async def upload_classification_dataset(file: UploadFile = File(...)):
+    """Lets a user train on their own offline classification dataset instead of a synthetically
+    generated one. Requires the same schema Testing's upload already accepts (carrier_freq_mhz,
+    pulse_width_us, pri_us, rise_time_ns, true_class_id — true_class_id = -1 marking
+    holdout/unknown rows). Replaces the canonical classification_dataset.csv + meta.json, so
+    Train Model on the Training page picks it up exactly like a generated one."""
+    contents = await file.read()
+    with open(CLASSIFICATION_DATASET_CSV, "wb") as f:
+        f.write(contents)
+
+    try:
+        df = pd.read_csv(CLASSIFICATION_DATASET_CSV)
+    except Exception:
+        return JSONResponse({"status": "error", "message": "Could not parse file as CSV."}, status_code=400)
+
+    missing = [c for c in _TEST_REQUIRED_COLUMNS if c not in df.columns]
+    if missing:
+        return JSONResponse({
+            "status": "error",
+            "message": f"Missing required columns {missing}. Expected: {_TEST_REQUIRED_COLUMNS} "
+                       f"(+ optional true_label), with true_class_id = -1 for holdout/unknown rows."
+        }, status_code=400)
+
+    labels = df["true_class_id"].astype(int)
+    known_mask = labels >= 0
+    if not known_mask.any():
+        return JSONResponse({"status": "error", "message": "No known-class rows found — every true_class_id is -1."}, status_code=400)
+
+    # Real-world class ids need not already be contiguous 0..N-1 — remap them so they are,
+    # since the classifier head indexes classes directly by id. -1 (unknown/holdout) untouched.
+    known_ids_raw = sorted(set(int(x) for x in labels[known_mask]))
+    remap = {old: new for new, old in enumerate(known_ids_raw)}
+    df["true_class_id"] = labels.apply(lambda x: remap.get(int(x), -1))
+    if "true_label" not in df.columns:
+        df["true_label"] = df["true_class_id"].apply(lambda c: f"class_{c}" if c >= 0 else "unknown")
+
+    df.to_csv(CLASSIFICATION_DATASET_CSV, index=False)
+
+    known_class_ids = list(range(len(known_ids_raw)))
+    holdout_class_ids = sorted(set(df.loc[~known_mask, "true_class_id"].tolist())) if (~known_mask).any() else []
+    num_classes = len(known_class_ids)
+    num_known_rows = int(known_mask.sum())
+
+    meta = {
+        "dataset_seed": int(np.random.randint(1_000_000)),
+        "num_classes": num_classes,
+        "num_holdout_classes": len(holdout_class_ids),
+        "samples_per_class": num_known_rows // num_classes if num_classes else 0,
+        "noise_pct": 0.0,
+        "holdout_class_ids": holdout_class_ids,
+        "known_class_ids": known_class_ids,
+        "ranges": {
+            "freq_min_mhz": float(df["carrier_freq_mhz"].min()), "freq_max_mhz": float(df["carrier_freq_mhz"].max()),
+            "pw_min_us": float(df["pulse_width_us"].min()), "pw_max_us": float(df["pulse_width_us"].max()),
+            "pri_min_us": float(df["pri_us"].min()), "pri_max_us": float(df["pri_us"].max()),
+            "rise_min_ns": float(df["rise_time_ns"].min()), "rise_max_ns": float(df["rise_time_ns"].max()),
+        },
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source": "uploaded",
+    }
+    with open(CLASSIFICATION_DATASET_META, "w") as f:
+        json.dump(meta, f, indent=2)
+
+    return JSONResponse({
+        "status": "success",
+        "num_classes": num_classes,
+        "num_holdout_classes": len(holdout_class_ids),
+        "total_rows": int(len(df)),
+        "known_rows": num_known_rows,
+        "openset_rows": int(len(df) - num_known_rows),
+    })
+
 @app.post("/api/test")
 async def run_test(req: TestRequest):
     sample_filename = None
